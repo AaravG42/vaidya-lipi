@@ -223,6 +223,9 @@ def structure_transcript(transcript: str) -> dict:
         json=payload,
         timeout=30,
     )
+    if not resp.ok:
+        print("AI Gateway 400 body:", resp.text)   # ADD THIS
+        resp.raise_for_status()
     resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"]
 
