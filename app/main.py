@@ -383,43 +383,60 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
     }
 
 _CSS = """
-/* ── Tokens ───────────────────────────────────────────────── */
+/* ── Dark Mode Tokens ─────────────────────────────────────── */
 :root {
-  --vl-teal:        #0F766E;
-  --vl-teal-dark:   #0D6660;
-  --vl-teal-pale:   #F0FDFA;
-  --vl-teal-ring:   rgba(15,118,110,0.15);
-  --vl-blue:        #0369A1;
-  --vl-slate-50:    #F8FAFC;
-  --vl-slate-100:   #F1F5F9;
-  --vl-slate-200:   #E2E8F0;
-  --vl-slate-400:   #94A3B8;
-  --vl-slate-600:   #475569;
-  --vl-slate-800:   #1E293B;
-  --vl-green:       #059669;
-  --vl-red:         #DC2626;
-  --vl-amber:       #D97706;
+  --vl-bg:          #0B1120;
+  --vl-surface:     #131F35;
+  --vl-surface-hi:  #1A2A45;
+  --vl-border:      #1E3050;
+  --vl-border-hi:   #2A4268;
+  --vl-teal:        #2DD4BF;
+  --vl-teal-btn:    #0D9488;
+  --vl-teal-btn-dk: #0F766E;
+  --vl-teal-pale:   rgba(45,212,191,0.07);
+  --vl-teal-ring:   rgba(45,212,191,0.2);
+  --vl-blue:        #38BDF8;
+  --vl-text:        #E2E8F0;
+  --vl-text-muted:  #94A3B8;
+  --vl-text-dim:    #475569;
+  --vl-green:       #34D399;
+  --vl-red:         #F87171;
+  --vl-amber:       #FBBF24;
   --vl-radius:      12px;
-  --vl-shadow:      0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --vl-shadow:      0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
 }
 
-/* ── Container ────────────────────────────────────────────── */
+/* ── Global Dark Base ─────────────────────────────────────── */
+body, html {
+  background: var(--vl-bg) !important;
+  color-scheme: dark;
+}
 .gradio-container {
-  background: var(--vl-slate-100) !important;
+  background: var(--vl-bg) !important;
   max-width: 1080px !important;
   margin: 0 auto !important;
   padding: 0 !important;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  color: var(--vl-text) !important;
 }
 footer { display: none !important; }
-.contain { padding: 0 !important; }
+.contain { padding: 0 !important; background: var(--vl-bg) !important; }
+
+/* Gradio internal wrappers — force dark */
+.block, .form, .gap, .padded,
+.wrap:not(.vl-header *),
+div[class*="gradio-"] {
+  background: transparent !important;
+}
+.tabitem { background: transparent !important; }
 
 /* ── App Header ───────────────────────────────────────────── */
 .vl-header {
-  background: linear-gradient(135deg, #0F766E 0%, #0369A1 100%);
+  background: linear-gradient(135deg, #0B4D45 0%, #0B3A5C 100%);
   border-radius: 0 0 20px 20px;
   padding: 26px 32px 30px;
   margin-bottom: 20px;
+  border-bottom: 1px solid #1A4060;
 }
 .vl-header-inner {
   display: flex;
@@ -436,8 +453,8 @@ footer { display: none !important; }
 }
 .vl-logo-icon {
   width: 46px; height: 46px;
-  background: rgba(255,255,255,0.18);
-  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(45,212,191,0.15);
+  border: 1px solid rgba(45,212,191,0.35);
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   font-size: 22px;
@@ -446,20 +463,20 @@ footer { display: none !important; }
 .vl-logo h1 {
   font-size: 1.75rem !important;
   font-weight: 800 !important;
-  color: white !important;
+  color: #E2E8F0 !important;
   margin: 0 !important;
   letter-spacing: -0.4px !important;
   line-height: 1.1 !important;
 }
 .vl-deva {
   font-size: 0.9rem;
-  color: rgba(255,255,255,0.72);
+  color: rgba(226,232,240,0.6);
   margin: 0;
   font-weight: 400;
 }
 .vl-tagline {
   font-size: 0.82rem;
-  color: rgba(255,255,255,0.65);
+  color: rgba(226,232,240,0.5);
   margin: 6px 0 0 0;
 }
 .vl-badges {
@@ -470,23 +487,23 @@ footer { display: none !important; }
   margin-top: 4px;
 }
 .vl-badge {
-  background: rgba(255,255,255,0.14);
-  border: 1px solid rgba(255,255,255,0.32);
+  background: rgba(45,212,191,0.12);
+  border: 1px solid rgba(45,212,191,0.3);
   border-radius: 20px;
   padding: 3px 11px;
   font-size: 0.7rem;
   font-weight: 700;
-  color: white;
+  color: var(--vl-teal);
   letter-spacing: 0.8px;
   text-transform: uppercase;
 }
 
 /* ── Cards ────────────────────────────────────────────────── */
 .vl-card {
-  background: white !important;
+  background: var(--vl-surface) !important;
   border-radius: var(--vl-radius) !important;
   box-shadow: var(--vl-shadow) !important;
-  border: 1px solid var(--vl-slate-200) !important;
+  border: 1px solid var(--vl-border) !important;
   padding: 20px 22px !important;
   margin-bottom: 14px !important;
 }
@@ -499,10 +516,10 @@ footer { display: none !important; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1.1px;
-  color: var(--vl-slate-400);
+  color: var(--vl-text-dim);
   margin: 0 0 14px 0;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--vl-slate-100);
+  border-bottom: 1px solid var(--vl-border);
 }
 
 /* ── Workflow Steps ───────────────────────────────────────── */
@@ -518,58 +535,67 @@ footer { display: none !important; }
   align-items: center;
   gap: 8px;
   font-size: 0.8rem;
-  color: var(--vl-slate-400);
+  color: var(--vl-text-muted);
   font-weight: 500;
   white-space: nowrap;
 }
 .vl-step-num {
   width: 26px; height: 26px;
   border-radius: 50%;
-  background: var(--vl-slate-100);
-  color: var(--vl-slate-400);
+  background: var(--vl-surface);
+  color: var(--vl-text-muted);
   display: flex; align-items: center; justify-content: center;
   font-size: 0.72rem; font-weight: 700;
   flex-shrink: 0;
-  border: 1.5px solid var(--vl-slate-200);
+  border: 1.5px solid var(--vl-border-hi);
 }
 .vl-step-line {
   width: 36px; height: 2px;
-  background: var(--vl-slate-200);
+  background: var(--vl-border);
   margin: 0 2px;
   flex-shrink: 0;
 }
 
 /* ── Tabs ─────────────────────────────────────────────────── */
-.tabs > .tab-nav { border-bottom: 2px solid var(--vl-slate-200) !important; }
+.tabs > .tab-nav { border-bottom: 2px solid var(--vl-border) !important; background: transparent !important; }
 .tabs > .tab-nav > button {
   font-weight: 600 !important;
   font-size: 0.88rem !important;
-  color: var(--vl-slate-600) !important;
+  color: var(--vl-text-muted) !important;
   padding: 10px 18px !important;
   border-radius: 0 !important;
   border-bottom: 2px solid transparent !important;
   margin-bottom: -2px !important;
+  background: transparent !important;
 }
 .tabs > .tab-nav > button.selected {
   color: var(--vl-teal) !important;
   border-bottom-color: var(--vl-teal) !important;
   background: transparent !important;
 }
+.tabs > .tab-nav > button:hover:not(.selected) {
+  color: var(--vl-text) !important;
+  background: rgba(255,255,255,0.04) !important;
+}
 
-/* ── Form Inputs ──────────────────────────────────────────── */
-.vl-card label > span:first-child,
-label > span.svelte-1b6s6xi {
+/* ── Form Labels ──────────────────────────────────────────── */
+label > span,
+.vl-card label > span:first-child {
   font-size: 0.75rem !important;
   font-weight: 600 !important;
-  color: var(--vl-slate-600) !important;
+  color: var(--vl-text-muted) !important;
   text-transform: uppercase !important;
   letter-spacing: 0.6px !important;
 }
+
+/* ── Form Inputs ──────────────────────────────────────────── */
 input[type="text"],
 input[type="number"],
 textarea {
   border-radius: 8px !important;
-  border-color: var(--vl-slate-200) !important;
+  border-color: var(--vl-border-hi) !important;
+  background: var(--vl-bg) !important;
+  color: var(--vl-text) !important;
   font-size: 0.9rem !important;
   transition: border-color 0.15s, box-shadow 0.15s !important;
 }
@@ -580,11 +606,15 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--vl-teal-ring) !important;
   outline: none !important;
 }
+input::placeholder, textarea::placeholder {
+  color: var(--vl-text-dim) !important;
+}
 
 /* ── Buttons ──────────────────────────────────────────────── */
 button.primary {
-  background: var(--vl-teal) !important;
-  border-color: var(--vl-teal) !important;
+  background: var(--vl-teal-btn) !important;
+  border-color: var(--vl-teal-btn) !important;
+  color: white !important;
   border-radius: 8px !important;
   font-weight: 600 !important;
   font-size: 0.88rem !important;
@@ -592,30 +622,31 @@ button.primary {
   transition: background 0.15s, transform 0.1s, box-shadow 0.15s !important;
 }
 button.primary:hover {
-  background: var(--vl-teal-dark) !important;
+  background: var(--vl-teal-btn-dk) !important;
   transform: translateY(-1px) !important;
-  box-shadow: 0 4px 14px rgba(15,118,110,0.28) !important;
+  box-shadow: 0 4px 16px rgba(13,148,136,0.35) !important;
 }
 button.secondary {
   border-radius: 8px !important;
   font-weight: 600 !important;
   font-size: 0.88rem !important;
   padding: 9px 20px !important;
-  border-color: var(--vl-slate-200) !important;
-  color: var(--vl-slate-600) !important;
-  background: white !important;
-  transition: background 0.15s, border-color 0.15s !important;
+  border-color: var(--vl-border-hi) !important;
+  color: var(--vl-text-muted) !important;
+  background: var(--vl-surface-hi) !important;
+  transition: background 0.15s, border-color 0.15s, color 0.15s !important;
 }
 button.secondary:hover {
-  background: var(--vl-slate-50) !important;
-  border-color: var(--vl-slate-400) !important;
+  background: var(--vl-border) !important;
+  border-color: var(--vl-text-dim) !important;
+  color: var(--vl-text) !important;
 }
 
 /* ── Audio Block ──────────────────────────────────────────── */
 .vl-audio .wrap,
 .vl-audio .audio-container {
   border-radius: 10px !important;
-  border: 2px dashed #99F6E4 !important;
+  border: 2px dashed rgba(45,212,191,0.3) !important;
   background: var(--vl-teal-pale) !important;
 }
 
@@ -624,12 +655,21 @@ button.secondary:hover {
 .vl-status textarea {
   font-size: 0.84rem !important;
   border-radius: 8px !important;
-  background: var(--vl-slate-50) !important;
-  color: var(--vl-slate-600) !important;
+  background: var(--vl-surface-hi) !important;
+  color: var(--vl-text-muted) !important;
   font-family: 'SF Mono', 'Fira Code', monospace !important;
+  border-color: var(--vl-border) !important;
 }
 
-/* ── Dashboard stat number box ────────────────────────────── */
+/* ── JSON viewers ─────────────────────────────────────────── */
+.json-holder, pre {
+  background: var(--vl-bg) !important;
+  color: var(--vl-text) !important;
+  border-color: var(--vl-border) !important;
+  border-radius: 8px !important;
+}
+
+/* ── Dashboard stat ───────────────────────────────────────── */
 .vl-stat input[type="number"] {
   font-size: 2.8rem !important;
   font-weight: 800 !important;
@@ -640,6 +680,10 @@ button.secondary:hover {
   border-radius: 10px !important;
   padding: 16px !important;
 }
+
+/* ── Misc Gradio overrides ────────────────────────────────── */
+.svelte-1gfkn6j, .panel { background: transparent !important; }
+p, span, li { color: var(--vl-text) !important; }
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -658,6 +702,42 @@ def build_app() -> gr.Blocks:
             primary_hue=gr.themes.colors.teal,
             secondary_hue=gr.themes.colors.blue,
             neutral_hue=gr.themes.colors.slate,
+        ).set(
+            body_background_fill="#0B1120",
+            body_background_fill_dark="#0B1120",
+            block_background_fill="#131F35",
+            block_background_fill_dark="#131F35",
+            block_border_color="#1E3050",
+            block_border_color_dark="#1E3050",
+            input_background_fill="#0B1120",
+            input_background_fill_dark="#0B1120",
+            input_border_color="#2A4268",
+            input_border_color_dark="#2A4268",
+            body_text_color="#E2E8F0",
+            body_text_color_dark="#E2E8F0",
+            body_text_color_subdued="#94A3B8",
+            body_text_color_subdued_dark="#94A3B8",
+            button_primary_background_fill="#0D9488",
+            button_primary_background_fill_dark="#0D9488",
+            button_primary_text_color="white",
+            button_primary_text_color_dark="white",
+            button_secondary_background_fill="#1A2A45",
+            button_secondary_background_fill_dark="#1A2A45",
+            button_secondary_border_color="#2A4268",
+            button_secondary_border_color_dark="#2A4268",
+            button_secondary_text_color="#94A3B8",
+            button_secondary_text_color_dark="#94A3B8",
+            border_color_primary="#1E3050",
+            border_color_primary_dark="#1E3050",
+            background_fill_primary="#0B1120",
+            background_fill_primary_dark="#0B1120",
+            background_fill_secondary="#131F35",
+            background_fill_secondary_dark="#131F35",
+            color_accent="#2DD4BF",
+            color_accent_soft="rgba(45,212,191,0.12)",
+            color_accent_soft_dark="rgba(45,212,191,0.12)",
+            shadow_drop="0 2px 8px rgba(0,0,0,0.5)",
+            shadow_drop_lg="0 4px 16px rgba(0,0,0,0.6)",
         ),
         title="Vaidya Lipi — Medical Scribe",
     ) as demo:
@@ -816,7 +896,7 @@ def build_app() -> gr.Blocks:
             # ── Tab 2: Doctor Dashboard ────────────────────────────
             with gr.Tab("📊  Dashboard"):
 
-                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;">Today\'s consultation summary for the active doctor.</p>')
+                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;background:transparent;">Today\'s consultation summary for the active doctor.</p>')
 
                 with gr.Group(elem_classes="vl-card"):
                     gr.HTML('<div class="vl-section-label">Overview</div>')
@@ -859,7 +939,7 @@ def build_app() -> gr.Blocks:
             # ── Tab 3: Health Alerts ───────────────────────────────
             with gr.Tab("⚠  Health Alerts"):
 
-                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;">Population-level insights from Spark analytics. Run Notebook 03 to generate alerts.</p>')
+                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;background:transparent;">Population-level insights from Spark analytics. Run Notebook 03 to generate alerts.</p>')
 
                 with gr.Group(elem_classes="vl-card"):
                     gr.HTML('<div class="vl-section-label">Active Alerts</div>')
