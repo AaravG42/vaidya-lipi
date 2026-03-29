@@ -4,6 +4,6 @@ env:
   - name: "LLM_OPENAI_BASE_URL"
     value: "https://7474652659157663.ai-gateway.cloud.databricks.com/mlflow/v1"
   - name: "LLM_MODEL"
-    value: "databricks-llama-4-maverick"
+    value: "system.ai.databricks-llama-4-maverick"
   - name: "HOSPITAL_ID"
     value: "DEMO_HOSPITAL"

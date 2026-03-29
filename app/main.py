@@ -288,7 +288,7 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
     spark = SparkSession.builder.getOrCreate()
 
     df = spark.sql(f"""
-        SELECT * FROM main.vaidya.patient_records
+        SELECT * FROM workspace.vaidya.patient_records
         WHERE doctor_id = '{doctor_id}'
         AND DATE(timestamp) = CURRENT_DATE()
     """)
@@ -444,7 +444,7 @@ def build_app() -> gr.Blocks:
                 spark = SparkSession.builder.getOrCreate()
                 try:
                     df = spark.sql("""
-                        SELECT * FROM main.vaidya.health_alerts
+                        SELECT * FROM workspace.vaidya.health_alerts
                         ORDER BY generated_at DESC LIMIT 5
                     """)
                     return [row.asDict() for row in df.collect()]
