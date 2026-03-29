@@ -382,151 +382,506 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
         "languages": languages,
     }
 
+_CSS = """
+/* ── Tokens ───────────────────────────────────────────────── */
+:root {
+  --vl-teal:        #0F766E;
+  --vl-teal-dark:   #0D6660;
+  --vl-teal-pale:   #F0FDFA;
+  --vl-teal-ring:   rgba(15,118,110,0.15);
+  --vl-blue:        #0369A1;
+  --vl-slate-50:    #F8FAFC;
+  --vl-slate-100:   #F1F5F9;
+  --vl-slate-200:   #E2E8F0;
+  --vl-slate-400:   #94A3B8;
+  --vl-slate-600:   #475569;
+  --vl-slate-800:   #1E293B;
+  --vl-green:       #059669;
+  --vl-red:         #DC2626;
+  --vl-amber:       #D97706;
+  --vl-radius:      12px;
+  --vl-shadow:      0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+/* ── Container ────────────────────────────────────────────── */
+.gradio-container {
+  background: var(--vl-slate-100) !important;
+  max-width: 1080px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+}
+footer { display: none !important; }
+.contain { padding: 0 !important; }
+
+/* ── App Header ───────────────────────────────────────────── */
+.vl-header {
+  background: linear-gradient(135deg, #0F766E 0%, #0369A1 100%);
+  border-radius: 0 0 20px 20px;
+  padding: 26px 32px 30px;
+  margin-bottom: 20px;
+}
+.vl-header-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.vl-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.vl-logo-icon {
+  width: 46px; height: 46px;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.vl-logo h1 {
+  font-size: 1.75rem !important;
+  font-weight: 800 !important;
+  color: white !important;
+  margin: 0 !important;
+  letter-spacing: -0.4px !important;
+  line-height: 1.1 !important;
+}
+.vl-deva {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.72);
+  margin: 0;
+  font-weight: 400;
+}
+.vl-tagline {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.65);
+  margin: 6px 0 0 0;
+}
+.vl-badges {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.vl-badge {
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.32);
+  border-radius: 20px;
+  padding: 3px 11px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.vl-card {
+  background: white !important;
+  border-radius: var(--vl-radius) !important;
+  box-shadow: var(--vl-shadow) !important;
+  border: 1px solid var(--vl-slate-200) !important;
+  padding: 20px 22px !important;
+  margin-bottom: 14px !important;
+}
+.vl-card > .wrap,
+.vl-card > div > .wrap { border: none !important; background: transparent !important; }
+
+/* ── Section Labels ───────────────────────────────────────── */
+.vl-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+  color: var(--vl-slate-400);
+  margin: 0 0 14px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vl-slate-100);
+}
+
+/* ── Workflow Steps ───────────────────────────────────────── */
+.vl-steps {
+  display: flex;
+  align-items: center;
+  padding: 12px 4px 18px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.vl-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--vl-slate-400);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.vl-step-num {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--vl-slate-100);
+  color: var(--vl-slate-400);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; font-weight: 700;
+  flex-shrink: 0;
+  border: 1.5px solid var(--vl-slate-200);
+}
+.vl-step-line {
+  width: 36px; height: 2px;
+  background: var(--vl-slate-200);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────── */
+.tabs > .tab-nav { border-bottom: 2px solid var(--vl-slate-200) !important; }
+.tabs > .tab-nav > button {
+  font-weight: 600 !important;
+  font-size: 0.88rem !important;
+  color: var(--vl-slate-600) !important;
+  padding: 10px 18px !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  margin-bottom: -2px !important;
+}
+.tabs > .tab-nav > button.selected {
+  color: var(--vl-teal) !important;
+  border-bottom-color: var(--vl-teal) !important;
+  background: transparent !important;
+}
+
+/* ── Form Inputs ──────────────────────────────────────────── */
+.vl-card label > span:first-child,
+label > span.svelte-1b6s6xi {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: var(--vl-slate-600) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.6px !important;
+}
+input[type="text"],
+input[type="number"],
+textarea {
+  border-radius: 8px !important;
+  border-color: var(--vl-slate-200) !important;
+  font-size: 0.9rem !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  border-color: var(--vl-teal) !important;
+  box-shadow: 0 0 0 3px var(--vl-teal-ring) !important;
+  outline: none !important;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+button.primary {
+  background: var(--vl-teal) !important;
+  border-color: var(--vl-teal) !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 0.88rem !important;
+  padding: 9px 20px !important;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s !important;
+}
+button.primary:hover {
+  background: var(--vl-teal-dark) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 14px rgba(15,118,110,0.28) !important;
+}
+button.secondary {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 0.88rem !important;
+  padding: 9px 20px !important;
+  border-color: var(--vl-slate-200) !important;
+  color: var(--vl-slate-600) !important;
+  background: white !important;
+  transition: background 0.15s, border-color 0.15s !important;
+}
+button.secondary:hover {
+  background: var(--vl-slate-50) !important;
+  border-color: var(--vl-slate-400) !important;
+}
+
+/* ── Audio Block ──────────────────────────────────────────── */
+.vl-audio .wrap,
+.vl-audio .audio-container {
+  border-radius: 10px !important;
+  border: 2px dashed #99F6E4 !important;
+  background: var(--vl-teal-pale) !important;
+}
+
+/* ── Status ───────────────────────────────────────────────── */
+.vl-status label > span { display: none !important; }
+.vl-status textarea {
+  font-size: 0.84rem !important;
+  border-radius: 8px !important;
+  background: var(--vl-slate-50) !important;
+  color: var(--vl-slate-600) !important;
+  font-family: 'SF Mono', 'Fira Code', monospace !important;
+}
+
+/* ── Dashboard stat number box ────────────────────────────── */
+.vl-stat input[type="number"] {
+  font-size: 2.8rem !important;
+  font-weight: 800 !important;
+  color: var(--vl-teal) !important;
+  text-align: center !important;
+  border: none !important;
+  background: var(--vl-teal-pale) !important;
+  border-radius: 10px !important;
+  padding: 16px !important;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .vl-header { padding: 18px 20px 22px; }
+  .vl-logo h1 { font-size: 1.4rem !important; }
+  .vl-steps { gap: 8px; }
+  .vl-step-line { width: 18px; }
+}
+"""
+
+
 def build_app() -> gr.Blocks:
     with gr.Blocks(
-        theme=gr.themes.Soft(primary_hue="blue", secondary_hue="teal"),
-        title="Vaidya Lipi — Medical Scribe"
+        css=_CSS,
+        theme=gr.themes.Base(
+            primary_hue=gr.themes.colors.teal,
+            secondary_hue=gr.themes.colors.blue,
+            neutral_hue=gr.themes.colors.slate,
+        ),
+        title="Vaidya Lipi — Medical Scribe",
     ) as demo:
 
-        gr.Markdown("# Vaidya Lipi · वैद्य लिपि\n*AI Medical Scribe · ABDM-compatible*")
+        gr.HTML("""
+        <div class="vl-header">
+          <div class="vl-header-inner">
+            <div>
+              <div class="vl-logo">
+                <div class="vl-logo-icon">⚕</div>
+                <div>
+                  <h1>Vaidya Lipi</h1>
+                  <p class="vl-deva">वैद्य लिपि</p>
+                </div>
+              </div>
+              <p class="vl-tagline">AI Medical Scribe — multilingual, ABDM-compatible</p>
+            </div>
+            <div class="vl-badges">
+              <span class="vl-badge">ABDM</span>
+              <span class="vl-badge">SNOMED CT</span>
+              <span class="vl-badge">Multilingual</span>
+            </div>
+          </div>
+        </div>
+        """)
 
         # State lives OUTSIDE tabs so both tabs can share it
         doctor_id_state = gr.State("DR001")
 
-        with gr.Tab("Record Consultation"):
-            with gr.Row():
-                patient_id_box = gr.Textbox(
-                    label="Patient ID (ABHA ID or local ID)",
-                    placeholder="e.g. PAT1234 or 14-digit ABHA",
-                    scale=2
-                )
-                doctor_id_box = gr.Textbox(
-                    label="Doctor ID",
-                    value="DR001",
-                    scale=1
-                )
+        with gr.Tabs():
 
-            # Sync the textbox into State whenever it changes
-            doctor_id_box.change(
-                fn=lambda x: x,
-                inputs=[doctor_id_box],
-                outputs=[doctor_id_state]
-            )
+            # ── Tab 1: Record Consultation ─────────────────────────
+            with gr.Tab("🎙  Record Consultation"):
 
-            gr.Markdown("**Step 1:** Enter patient ID. **Step 2:** Record. **Step 3:** Click Transcribe.")
+                with gr.Group(elem_classes="vl-card"):
+                    gr.HTML('<div class="vl-section-label">Patient Information</div>')
+                    with gr.Row():
+                        patient_id_box = gr.Textbox(
+                            label="Patient ID",
+                            placeholder="ABHA ID or local ID  (e.g. PAT1234)",
+                            scale=2,
+                        )
+                        doctor_id_box = gr.Textbox(
+                            label="Doctor ID",
+                            value="DR001",
+                            scale=1,
+                        )
 
-            audio_input = gr.Audio(
-                sources=["microphone"],
-                type="numpy",
-                label="Record consultation (Hindi, English, or any Indian language)",
-            )
+                gr.HTML("""
+                <div class="vl-steps">
+                  <div class="vl-step">
+                    <div class="vl-step-num">1</div>
+                    <span>Enter patient details</span>
+                  </div>
+                  <div class="vl-step-line"></div>
+                  <div class="vl-step">
+                    <div class="vl-step-num">2</div>
+                    <span>Record consultation</span>
+                  </div>
+                  <div class="vl-step-line"></div>
+                  <div class="vl-step">
+                    <div class="vl-step-num">3</div>
+                    <span>Transcribe audio</span>
+                  </div>
+                  <div class="vl-step-line"></div>
+                  <div class="vl-step">
+                    <div class="vl-step-num">4</div>
+                    <span>Structure &amp; save</span>
+                  </div>
+                </div>
+                """)
 
-            transcript_box = gr.Textbox(
-                label="Transcript (auto-filled, edit if needed)",
-                lines=4,
-                placeholder="Transcript will appear here after recording..."
-            )
-
-            with gr.Row():
-                transcribe_btn = gr.Button("Transcribe Audio", variant="secondary")
-                process_btn = gr.Button("Structure & Save Record", variant="primary")
-
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("### SOAP Note")
-                    soap_box = gr.JSON(label="Structured Note")
-                with gr.Column():
-                    gr.Markdown("### Detected Medical Entities (SNOMED)")
-                    entities_box = gr.JSON(label="Entities (Parrotlet-e)")
-
-            status_box = gr.Textbox(label="Status", interactive=False)
-
-            def on_transcribe(audio):
-                if audio is None:
-                    return "No audio recorded. Please use the microphone."
-                try:
-                    transcript, lang = transcribe_audio(audio)
-                    return f"[{lang}] {transcript}"
-                except Exception as e:
-                    return f"Transcription error: {e}"
-
-            def on_process(patient_id, doctor_id, transcript):
-                if not transcript.strip():
-                    return {}, [], "Please transcribe audio or type a transcript first."
-                try:
-                    structured = structure_transcript(transcript)
-                    entities = extract_medical_entities(transcript)
-                    record_id = save_record(
-                        patient_id=patient_id or "UNKNOWN",
-                        doctor_id=doctor_id or "DR001",
-                        transcript=transcript,
-                        structured=structured,
-                        entities=entities,
-                        language="mixed"
+                with gr.Group(elem_classes="vl-card vl-audio"):
+                    gr.HTML('<div class="vl-section-label">Audio Recording</div>')
+                    audio_input = gr.Audio(
+                        sources=["microphone"],
+                        type="numpy",
+                        label="Record in Hindi, English, or any Indian language",
                     )
-                    return structured, entities, f"✓ Saved. Record ID: {record_id}"
-                except Exception as e:
-                    logging.exception("process error")
-                    return {}, [], f"Error: {e}"
 
-            # Only button click — no stop_recording
-            transcribe_btn.click(
-                fn=on_transcribe,
-                inputs=[audio_input],
-                outputs=[transcript_box]
-            )
-            process_btn.click(
-                fn=on_process,
-                inputs=[patient_id_box, doctor_id_box, transcript_box],
-                outputs=[soap_box, entities_box, status_box]
-            )
-
-        with gr.Tab("Doctor Dashboard"):
-            refresh_btn = gr.Button("Refresh Dashboard", variant="secondary")
-            total_box = gr.Number(label="Patients Seen Today")
-            symptoms_box = gr.JSON(label="Top 5 Symptoms Today")
-            lang_box = gr.JSON(label="Language Breakdown")
-
-            def refresh_dashboard(doctor_id):
-                try:
-                    data = get_doctor_dashboard(doctor_id)
-                    return (
-                        data["total_patients_today"],
-                        data["top_symptoms"],
-                        data["languages"]
+                with gr.Group(elem_classes="vl-card"):
+                    gr.HTML('<div class="vl-section-label">Transcript</div>')
+                    transcript_box = gr.Textbox(
+                        label="",
+                        lines=4,
+                        placeholder="Transcript appears here after recording — or type manually…",
+                        show_label=False,
                     )
-                except Exception as e:
-                    return 0, [], {"error": str(e)}
+                    with gr.Row():
+                        transcribe_btn = gr.Button("↺  Transcribe Audio", variant="secondary")
+                        process_btn = gr.Button("✦  Structure & Save Record", variant="primary")
 
-            # Use State, not the textbox from Tab 1
-            refresh_btn.click(
-                fn=refresh_dashboard,
-                inputs=[doctor_id_state],
-                outputs=[total_box, symptoms_box, lang_box]
-            )
+                with gr.Row(equal_height=False):
+                    with gr.Column():
+                        with gr.Group(elem_classes="vl-card"):
+                            gr.HTML('<div class="vl-section-label">SOAP Note</div>')
+                            soap_box = gr.JSON(label="", show_label=False)
+                    with gr.Column():
+                        with gr.Group(elem_classes="vl-card"):
+                            gr.HTML('<div class="vl-section-label">SNOMED Entities  (Parrotlet-e)</div>')
+                            entities_box = gr.JSON(label="", show_label=False)
 
-        with gr.Tab("Health Alerts"):
-            gr.Markdown("### Population-level insights from Spark analytics")
-            gr.Markdown("*(Run Notebook 03 to generate alerts, then refresh)*")
-            alerts_refresh = gr.Button("Load Alerts")
-            alerts_display = gr.JSON(label="Current Alerts")
+                status_box = gr.Textbox(
+                    label="Status",
+                    interactive=False,
+                    elem_classes="vl-status",
+                )
 
-            def load_alerts():
-                query = """
-                    SELECT alert_id, generated_at, insight_text, severity
-                    FROM workspace.vaidya.health_alerts
-                    ORDER BY generated_at DESC LIMIT 5
-                """
-                try:
-                    with _get_sql_connection() as conn:
-                        with conn.cursor() as cursor:
-                            cursor.execute(query)
-                            cols = [d[0] for d in cursor.description]
-                            return [dict(zip(cols, row)) for row in cursor.fetchall()]
-                except Exception as e:
-                    return [{"error": str(e)}]
+                # ── Sync doctor ID into shared State ──────────────
+                doctor_id_box.change(
+                    fn=lambda x: x,
+                    inputs=[doctor_id_box],
+                    outputs=[doctor_id_state],
+                )
 
-            alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
+                def on_transcribe(audio):
+                    if audio is None:
+                        return "No audio recorded. Please use the microphone."
+                    try:
+                        transcript, lang = transcribe_audio(audio)
+                        return f"[{lang}] {transcript}"
+                    except Exception as e:
+                        return f"Transcription error: {e}"
+
+                def on_process(patient_id, doctor_id, transcript):
+                    if not transcript.strip():
+                        return {}, [], "Please transcribe audio or type a transcript first."
+                    try:
+                        structured = structure_transcript(transcript)
+                        entities = extract_medical_entities(transcript)
+                        record_id = save_record(
+                            patient_id=patient_id or "UNKNOWN",
+                            doctor_id=doctor_id or "DR001",
+                            transcript=transcript,
+                            structured=structured,
+                            entities=entities,
+                            language="mixed",
+                        )
+                        return structured, entities, f"✓ Saved. Record ID: {record_id}"
+                    except Exception as e:
+                        logging.exception("process error")
+                        return {}, [], f"Error: {e}"
+
+                # Only button click — no stop_recording
+                transcribe_btn.click(
+                    fn=on_transcribe,
+                    inputs=[audio_input],
+                    outputs=[transcript_box],
+                )
+                process_btn.click(
+                    fn=on_process,
+                    inputs=[patient_id_box, doctor_id_box, transcript_box],
+                    outputs=[soap_box, entities_box, status_box],
+                )
+
+            # ── Tab 2: Doctor Dashboard ────────────────────────────
+            with gr.Tab("📊  Dashboard"):
+
+                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;">Today\'s consultation summary for the active doctor.</p>')
+
+                with gr.Group(elem_classes="vl-card"):
+                    gr.HTML('<div class="vl-section-label">Overview</div>')
+                    with gr.Row():
+                        refresh_btn = gr.Button("↻  Refresh Dashboard", variant="secondary", scale=1)
+                        with gr.Column(scale=2):
+                            total_box = gr.Number(
+                                label="Patients Seen Today",
+                                elem_classes="vl-stat",
+                            )
+
+                with gr.Row(equal_height=False):
+                    with gr.Column():
+                        with gr.Group(elem_classes="vl-card"):
+                            gr.HTML('<div class="vl-section-label">Top 5 Symptoms Today</div>')
+                            symptoms_box = gr.JSON(label="", show_label=False)
+                    with gr.Column():
+                        with gr.Group(elem_classes="vl-card"):
+                            gr.HTML('<div class="vl-section-label">Language Breakdown</div>')
+                            lang_box = gr.JSON(label="", show_label=False)
+
+                def refresh_dashboard(doctor_id):
+                    try:
+                        data = get_doctor_dashboard(doctor_id)
+                        return (
+                            data["total_patients_today"],
+                            data["top_symptoms"],
+                            data["languages"],
+                        )
+                    except Exception as e:
+                        return 0, [], {"error": str(e)}
+
+                # Use State, not the textbox from Tab 1
+                refresh_btn.click(
+                    fn=refresh_dashboard,
+                    inputs=[doctor_id_state],
+                    outputs=[total_box, symptoms_box, lang_box],
+                )
+
+            # ── Tab 3: Health Alerts ───────────────────────────────
+            with gr.Tab("⚠  Health Alerts"):
+
+                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;">Population-level insights from Spark analytics. Run Notebook 03 to generate alerts.</p>')
+
+                with gr.Group(elem_classes="vl-card"):
+                    gr.HTML('<div class="vl-section-label">Active Alerts</div>')
+                    alerts_refresh = gr.Button("↻  Load Alerts", variant="secondary")
+                    alerts_display = gr.JSON(label="", show_label=False)
+
+                def load_alerts():
+                    query = """
+                        SELECT alert_id, generated_at, insight_text, severity
+                        FROM workspace.vaidya.health_alerts
+                        ORDER BY generated_at DESC LIMIT 5
+                    """
+                    try:
+                        with _get_sql_connection() as conn:
+                            with conn.cursor() as cursor:
+                                cursor.execute(query)
+                                cols = [d[0] for d in cursor.description]
+                                return [dict(zip(cols, row)) for row in cursor.fetchall()]
+                    except Exception as e:
+                        return [{"error": str(e)}]
+
+                alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
 
     return demo
 
