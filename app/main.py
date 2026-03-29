@@ -997,7 +997,8 @@ def build_app() -> gr.Blocks:
         gr.HTML(f"""
         <div class="vaidya-header">
           <div class="vaidya-logo">
-            <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            # Change viewBox and add width/height directly on the svg tag:
+            <svg viewBox="0 0 52 52" width="36" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
               <!-- Outer circle -->
               <circle cx="26" cy="26" r="25" fill="#f0fff4" stroke="#38a169" stroke-width="2"/>
               <!-- Doctor head -->
