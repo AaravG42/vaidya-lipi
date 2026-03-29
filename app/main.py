@@ -192,9 +192,63 @@ symptoms, medications, diagnosis, plan, soap_s, soap_o, soap_a, soap_p
 Transcript:
 """
 
+# def structure_transcript(transcript: str) -> dict:
+#     """Call Llama 4 Maverick via AI Gateway to structure the transcript."""
+#     import requests
+
+#     base_url = os.environ.get("LLM_OPENAI_BASE_URL", "")
+#     model = os.environ.get("LLM_MODEL", "databricks-llama-4-maverick")
+
+#     if not base_url:
+#         raise ValueError("LLM_OPENAI_BASE_URL not set in app.yaml")
+
+#     # Get OAuth token (works on Databricks Apps, no PAT needed)
+#     from databricks.sdk import WorkspaceClient
+#     w = WorkspaceClient()
+#     headers_auth = w.config.authenticate()
+
+#     payload = {
+#         "model": model,
+#         "messages": [
+#             {"role": "system", "content": SOAP_PROMPT},
+#             {"role": "user", "content": transcript}
+#         ],
+#         "max_tokens": 1024,
+#         "temperature": 0.1,  # low temp for structured extraction
+#     }
+
+#     resp = requests.post(
+#         f"{base_url}/chat/completions",
+#         headers={**headers_auth, "Content-Type": "application/json"},
+#         json=payload,
+#         timeout=30,
+#     )
+#     if not resp.ok:
+#         print("AI Gateway 400 body:", resp.text)   # ADD THIS
+#         resp.raise_for_status()
+#     resp.raise_for_status()
+#     content = resp.json()["choices"][0]["message"]["content"]
+
+#     # Strip markdown fences if present
+#     content = content.strip()
+#     if content.startswith("```"):
+#         content = content.split("```")[1]
+#         if content.startswith("json"):
+#             content = content[4:]
+#     content = content.strip()
+
+#     try:
+#         return json.loads(content)
+#     except json.JSONDecodeError:
+#         # Fallback: return raw text in a structured wrapper
+#         return {
+#             "symptoms": [], "medications": [], "diagnosis": "See raw note",
+#             "plan": content, "soap_s": transcript,
+#             "soap_o": "", "soap_a": "", "soap_p": ""
+#         }
 def structure_transcript(transcript: str) -> dict:
-    """Call Llama 4 Maverick via AI Gateway to structure the transcript."""
-    import requests
+    from openai import OpenAI
+    from databricks.sdk import WorkspaceClient
 
     base_url = os.environ.get("LLM_OPENAI_BASE_URL", "")
     model = os.environ.get("LLM_MODEL", "databricks-llama-4-maverick")
@@ -202,35 +256,28 @@ def structure_transcript(transcript: str) -> dict:
     if not base_url:
         raise ValueError("LLM_OPENAI_BASE_URL not set in app.yaml")
 
-    # Get OAuth token (works on Databricks Apps, no PAT needed)
-    from databricks.sdk import WorkspaceClient
+    # Get a fresh token the same way Nyaya Dhwani does it
     w = WorkspaceClient()
-    headers_auth = w.config.authenticate()
+    token = w.config.authenticate().get("Authorization", "").replace("Bearer ", "")
 
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SOAP_PROMPT},
-            {"role": "user", "content": transcript}
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.1,  # low temp for structured extraction
-    }
-
-    resp = requests.post(
-        f"{base_url}/chat/completions",
-        headers={**headers_auth, "Content-Type": "application/json"},
-        json=payload,
-        timeout=30,
+    client = OpenAI(
+        api_key=token,
+        base_url=base_url,
     )
-    if not resp.ok:
-        print("AI Gateway 400 body:", resp.text)   # ADD THIS
-        resp.raise_for_status()
-    resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": SOAP_PROMPT},
+            {"role": "user",   "content": transcript},
+        ],
+        max_tokens=1024,
+        temperature=0.1,
+    )
+
+    content = response.choices[0].message.content.strip()
 
     # Strip markdown fences if present
-    content = content.strip()
     if content.startswith("```"):
         content = content.split("```")[1]
         if content.startswith("json"):
@@ -240,7 +287,6 @@ def structure_transcript(transcript: str) -> dict:
     try:
         return json.loads(content)
     except json.JSONDecodeError:
-        # Fallback: return raw text in a structured wrapper
         return {
             "symptoms": [], "medications": [], "diagnosis": "See raw note",
             "plan": content, "soap_s": transcript,
