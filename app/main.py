@@ -560,7 +560,8 @@ def fetch_dashboard_data(doctor_id: str, scope: str = "personal") -> dict:
                 COUNT(*) as cnt
             FROM workspace.vaidya.patient_records
             WHERE {where} AND timestamp >= current_timestamp() - interval 7 days
-            GROUP BY diagnosis ORDER BY cnt DESC LIMIT 5""",
+            GROUP BY get_json_object(structured_note,'$.diagnosis')
+            ORDER BY cnt DESC LIMIT 5""",
     }
 
     if scope == "regional":
