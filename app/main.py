@@ -750,26 +750,28 @@ def fetch_all_records_for_ml() -> list[dict]:
 
 
 def run_ml_analysis(records: list[dict], n_clusters: int = 4):
-    """
-    Full ML pipeline:
-      1. Build binary symptom vectors
-      2. K-Means clustering
-      3. Anomaly detection via centroid distance
-      4. Temporal spike detection
-    Returns a dict of matplotlib figures.
-    """
     import json
     import numpy as np
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from collections import Counter
+    from collections import Counter, defaultdict
     from sklearn.preprocessing import MultiLabelBinarizer
     from sklearn.cluster import KMeans
     from sklearn.metrics import silhouette_score
     from sklearn.decomposition import PCA
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
-    GREEN = ["#1a4731","#276749","#2f855a","#38a169","#48bb78","#68d391","#9ae6b4","#c6f6d5"]
+    GREEN_SCALE = [
+        "#1a4731","#276749","#2f855a","#38a169",
+        "#48bb78","#68d391","#9ae6b4","#c6f6d5"
+    ]
+    PLOTLY_LAYOUT = dict(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="sans-serif", size=12),
+        margin=dict(l=10, r=10, t=60, b=10),
+        hoverlabel=dict(bgcolor="#1a202c", font_size=12),
+    )
 
     # ── 1. Parse symptoms ─────────────────────────────────────────────────────
     parsed = []
@@ -794,7 +796,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
     n_clusters = min(n_clusters, len(parsed) - 1)
 
     # ── 3. Silhouette sweep ───────────────────────────────────────────────────
-    k_range = range(2, min(8, len(parsed)))
+    k_range = range(2, min(9, len(parsed)))
     sil_scores = {}
     for k in k_range:
         km = KMeans(n_clusters=k, random_state=42, n_init=10, max_iter=200)
@@ -802,9 +804,12 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         if len(set(labels)) > 1:
             sil_scores[k] = silhouette_score(X, labels, metric="cosine")
 
-    best_k = max(sil_scores, key=sil_scores.get) if sil_scores else n_clusters
+    if not sil_scores:
+        return None, "Could not compute silhouette scores — try adding more records."
 
-    # ── 4. Final K-Means ─────────────────────────────────────────────────────
+    best_k = max(sil_scores, key=sil_scores.get)
+
+    # ── 4. Final K-Means ──────────────────────────────────────────────────────
     km_final = KMeans(n_clusters=best_k, random_state=42, n_init=10, max_iter=300)
     cluster_labels = km_final.fit_predict(X)
     centroids = km_final.cluster_centers_
@@ -818,8 +823,10 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         norm = np.linalg.norm(vec) * np.linalg.norm(centroid)
         return 1.0 - dot / norm if norm > 0 else 1.0
 
-    scores = np.array([cosine_dist(X[i], centroids[cluster_labels[i]])
-                       for i in range(len(parsed))])
+    scores = np.array([
+        cosine_dist(X[i], centroids[cluster_labels[i]])
+        for i in range(len(parsed))
+    ])
     mean_s, std_s = scores.mean(), scores.std()
     threshold = mean_s + 1.5 * std_s
     anomaly_flags = scores > threshold
@@ -828,15 +835,29 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         r["anomaly_score"] = float(scores[i])
         r["is_anomaly"]    = bool(anomaly_flags[i])
 
-    # ── 6. Temporal daily counts ──────────────────────────────────────────────
-    from collections import defaultdict
-    daily_sym: dict = defaultdict(lambda: defaultdict(int))
+    # ── 6. Cluster profiles ───────────────────────────────────────────────────
+    cluster_profiles = {}
+    for cid in range(best_k):
+        members  = [r for r in parsed if r["cluster"] == cid]
+        all_sym  = [s for r in members for s in r["symptoms"]]
+        top      = Counter(all_sym).most_common(6)
+        top_dx   = Counter([
+            r.get("diagnosis","?") for r in members if r.get("diagnosis")
+        ]).most_common(2)
+        cluster_profiles[cid] = {
+            "size":          len(members),
+            "top_symptoms":  top,
+            "top_diagnoses": [d for d,_ in top_dx],
+        }
+
+    # ── 7. Temporal daily symptom counts ─────────────────────────────────────
+    daily_sym = defaultdict(lambda: defaultdict(int))
     for r in parsed:
-        day = str(r.get("visit_date", ""))[:10]
+        day = str(r.get("visit_date",""))[:10]
         for s in r["symptoms"]:
             daily_sym[day][s] += 1
 
-   # ══ FIGURES — all Plotly ══════════════════════════════════════════════════
+    # ══ FIGURES ══════════════════════════════════════════════════════════════
 
     # Fig 1 — Silhouette scores
     ks = list(sil_scores.keys())
@@ -858,15 +879,14 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
     fig1.update_layout(
         title=dict(text="K-Means: Silhouette Score by K",
                    font=dict(size=14, color="#9ae6b4")),
-        xaxis=dict(title="Number of Clusters (K)", dtick=1,
-                   gridcolor="#2d3748"),
+        xaxis=dict(title="Number of Clusters (K)", dtick=1, gridcolor="#2d3748"),
         yaxis=dict(title="Silhouette Score", gridcolor="#2d3748",
-                   range=[0, max(ss) * 1.25 if ss else 1]),
+                   range=[0, max(ss) * 1.25]),
         showlegend=False,
         **PLOTLY_LAYOUT,
     )
 
-    # Fig 2 — Cluster profiles (subplots, one bar chart per cluster)
+    # Fig 2 — Cluster symptom profiles
     fig2 = make_subplots(
         rows=1, cols=best_k,
         subplot_titles=[
@@ -902,35 +922,32 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         fig2.update_yaxes(gridcolor="#2d3748", showgrid=False, row=1, col=i)
 
     # Fig 3 — PCA scatter
-    pca = PCA(n_components=2, random_state=42)
+    pca  = PCA(n_components=2, random_state=42)
     X_2d = pca.fit_transform(X)
 
     fig3 = go.Figure()
     for cid in range(best_k):
-        mask = cluster_labels == cid
+        mask    = cluster_labels == cid
         members = [parsed[i] for i in range(len(parsed)) if mask[i]]
-        hover_text = [
+        hover   = [
             f"Patient: {r['patient_id']}<br>"
             f"Symptoms: {', '.join(r['symptoms'][:3])}<br>"
             f"Diagnosis: {r.get('diagnosis','—')}"
             for r in members
         ]
         fig3.add_trace(go.Scatter(
-            x=X_2d[mask, 0],
-            y=X_2d[mask, 1],
+            x=X_2d[mask, 0], y=X_2d[mask, 1],
             mode="markers",
             name=f"Cluster {cid}",
             marker=dict(
                 color=GREEN_SCALE[2 + cid % 4],
-                size=9,
-                opacity=0.8,
+                size=9, opacity=0.8,
                 line=dict(color="#1a202c", width=0.5),
             ),
-            text=hover_text,
+            text=hover,
             hovertemplate="%{text}<extra></extra>",
         ))
 
-    # Anomaly ring overlay
     anom_indices = [i for i, r in enumerate(parsed) if r["is_anomaly"]]
     if anom_indices:
         anom_hover = [
@@ -940,13 +957,11 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
             for i in anom_indices
         ]
         fig3.add_trace(go.Scatter(
-            x=X_2d[anom_indices, 0],
-            y=X_2d[anom_indices, 1],
+            x=X_2d[anom_indices, 0], y=X_2d[anom_indices, 1],
             mode="markers",
             name="⚠ Anomaly",
             marker=dict(
-                color="rgba(0,0,0,0)",
-                size=18,
+                color="rgba(0,0,0,0)", size=18,
                 line=dict(color="#fc8181", width=2.5),
             ),
             text=anom_hover,
@@ -955,10 +970,12 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
 
     fig3.update_layout(
         title=dict(
-            text=f"Patient Clusters — PCA Projection"
-                 f"<br><sup>PC1: {pca.explained_variance_ratio_[0]*100:.1f}% variance · "
-                 f"PC2: {pca.explained_variance_ratio_[1]*100:.1f}% variance · "
-                 f"Red rings = anomalies</sup>",
+            text=(
+                f"Patient Clusters — PCA Projection"
+                f"<br><sup>PC1: {pca.explained_variance_ratio_[0]*100:.1f}% · "
+                f"PC2: {pca.explained_variance_ratio_[1]*100:.1f}% variance · "
+                f"Red rings = anomalies</sup>"
+            ),
             font=dict(size=14, color="#9ae6b4")
         ),
         xaxis=dict(title="PC1", gridcolor="#2d3748", zeroline=False),
@@ -974,8 +991,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         fig4.add_trace(go.Histogram(
             x=scores[mask],
             name=f"Cluster {cid}",
-            marker=dict(color=GREEN_SCALE[2 + cid % 4],
-                        line=dict(width=0)),
+            marker=dict(color=GREEN_SCALE[2 + cid % 4], line=dict(width=0)),
             opacity=0.7,
             nbinsx=15,
             hovertemplate="Score: %{x:.3f}<br>Count: %{y}<extra></extra>",
@@ -993,7 +1009,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
     )
     fig4.update_layout(
         title=dict(
-            text=f"Anomaly Score Distribution — {anomaly_flags.sum()} flagged",
+            text=f"Anomaly Score Distribution — {int(anomaly_flags.sum())} flagged",
             font=dict(size=14, color="#9ae6b4")
         ),
         xaxis=dict(title="Cosine distance to centroid", gridcolor="#2d3748"),
@@ -1003,10 +1019,10 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         **PLOTLY_LAYOUT,
     )
 
-    # Fig 5 — Temporal symptom trends
+    # Fig 5 — Temporal symptom trends with spike markers
     all_sym_flat = Counter([s for r in parsed for s in r["symptoms"]])
-    top5 = [s for s, _ in all_sym_flat.most_common(5)]
-    days_sorted = sorted(daily_sym.keys())
+    top5         = [s for s,_ in all_sym_flat.most_common(5)]
+    days_sorted  = sorted(daily_sym.keys())
 
     fig5 = go.Figure()
     for i, sym in enumerate(top5):
@@ -1014,9 +1030,9 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         if max(counts_by_day) == 0:
             continue
         color = GREEN_SCALE[1 + i % 6]
+
         fig5.add_trace(go.Scatter(
-            x=days_sorted,
-            y=counts_by_day,
+            x=days_sorted, y=counts_by_day,
             mode="lines+markers",
             name=sym,
             line=dict(color=color, width=2),
@@ -1024,29 +1040,29 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
             hovertemplate=f"<b>{sym}</b><br>Date: %{{x}}<br>Cases: %{{y}}<extra></extra>",
         ))
 
-        # Spike markers
         arr = np.array(counts_by_day, dtype=float)
         if arr.std() > 0:
             spike_thresh = arr.mean() + 2 * arr.std()
-            spike_days   = [days_sorted[j] for j, v in enumerate(counts_by_day)
-                            if v > spike_thresh]
-            spike_vals   = [counts_by_day[j] for j, v in enumerate(counts_by_day)
-                            if v > spike_thresh]
-            if spike_days:
+            spike_x = [days_sorted[j] for j,v in enumerate(counts_by_day)
+                       if v > spike_thresh]
+            spike_y = [counts_by_day[j] for j,v in enumerate(counts_by_day)
+                       if v > spike_thresh]
+            if spike_x:
                 fig5.add_trace(go.Scatter(
-                    x=spike_days, y=spike_vals,
+                    x=spike_x, y=spike_y,
                     mode="markers",
-                    marker=dict(symbol="triangle-up", size=14,
-                                color="#fc8181",
+                    marker=dict(symbol="triangle-up", size=14, color="#fc8181",
                                 line=dict(color="#fff", width=1)),
                     name=f"⚠ {sym} spike",
-                    hovertemplate=f"⚠ SPIKE: {sym}<br>Date: %{{x}}<br>Cases: %{{y}}<extra></extra>",
-                    showlegend=True,
+                    hovertemplate=(
+                        f"⚠ SPIKE: {sym}<br>"
+                        f"Date: %{{x}}<br>Cases: %{{y}}<extra></extra>"
+                    ),
                 ))
 
     fig5.update_layout(
         title=dict(
-            text="Symptom Trends Over Time  <sup>▲ = statistical spike (>2σ)</sup>",
+            text="Symptom Trends Over Time  <sup>▲ = statistical spike (>2σ above mean)</sup>",
             font=dict(size=14, color="#9ae6b4")
         ),
         xaxis=dict(title="Date", gridcolor="#2d3748", tickangle=-30),
@@ -1055,21 +1071,25 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         **PLOTLY_LAYOUT,
     )
 
-    # Anomaly table rows (unchanged)
+    # ── Anomaly table rows ────────────────────────────────────────────────────
     anomaly_rows = [
-        [r["patient_id"], r["doctor_id"],
-         ", ".join(r["symptoms"][:3]),
-         r.get("diagnosis", "—"),
-         f"{r['anomaly_score']:.3f}",
-         f"Cluster {r['cluster']}"]
+        [
+            r["patient_id"],
+            r["doctor_id"],
+            ", ".join(r["symptoms"][:3]),
+            r.get("diagnosis","—"),
+            f"{r['anomaly_score']:.3f}",
+            f"Cluster {r['cluster']}",
+        ]
         for r in sorted(parsed, key=lambda x: -x["anomaly_score"])
         if r["is_anomaly"]
     ]
 
     summary = (
         f"**{len(parsed)}** records analysed · "
-        f"**{best_k}** clusters (best silhouette: {sil_scores[best_k]:.3f}) · "
-        f"**{anomaly_flags.sum()}** anomalies flagged "
+        f"**{best_k}** clusters found "
+        f"(best silhouette: {sil_scores[best_k]:.3f}) · "
+        f"**{int(anomaly_flags.sum())}** anomalies flagged "
         f"(threshold {threshold:.3f})"
     )
 
@@ -1082,7 +1102,6 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         "anomaly_rows":     anomaly_rows,
         "summary":          summary,
     }, None
-
 
 def fetch_dashboard_data(doctor_id: str, scope: str = "personal") -> dict:
     """scope = 'personal' (one doctor) or 'regional' (all doctors)."""
