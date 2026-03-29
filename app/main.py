@@ -52,17 +52,24 @@ def _load_secrets():
             logging.warning("Could not load %s: %s", env_var, e)
 
 
-def transcribe_audio(audio_numpy: tuple) -> str:
-    """Send audio to Sarvam Saaras v3 for transcription."""
+def transcribe_audio(audio_numpy) -> tuple[str, str]:
     import io, wave, requests
+
+    if audio_numpy is None:
+        return "", "en-IN"
+
     sr, data = audio_numpy
     data = np.asarray(data)
 
-    # Convert to WAV bytes
+    # Convert to mono if stereo
+    if data.ndim == 2:
+        data = data.mean(axis=1)
+
+    # Convert to 16-bit PCM WAV
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
         wf.setnchannels(1)
-        wf.setsampwidth(2)  # 16-bit
+        wf.setsampwidth(2)
         wf.setframerate(sr)
         if data.dtype != np.int16:
             data = (data * 32767).clip(-32768, 32767).astype(np.int16)
@@ -73,19 +80,21 @@ def transcribe_audio(audio_numpy: tuple) -> str:
     if not api_key:
         raise ValueError("SARVAM_API_KEY not set")
 
-    # Saaras v3 — multilingual, handles code-mix Hindi+English
     response = requests.post(
         "https://api.sarvam.ai/speech-to-text",
-        headers={"api-subscription-key": api_key},
+        headers={"api-subscription-key": api_key},   # correct header name
         files={"file": ("audio.wav", wav_bytes, "audio/wav")},
         data={
-            "model": "saaras:v2",         # v2 is currently in API, v3 via streaming
-            "language_code": "unknown",    # auto-detect language
-            "with_timestamps": "false",
+            "model": "saaras:v3",           # correct model name
+            "mode": "transcribe",           # transcribe keeps original language
+            "language_code": "unknown",     # auto-detect
         },
         timeout=30,
     )
-    response.raise_for_status()
+
+    if response.status_code != 200:
+        raise ValueError(f"Sarvam API error {response.status_code}: {response.text}")
+
     result = response.json()
     transcript = result.get("transcript", "")
     detected_lang = result.get("language_code", "en-IN")
@@ -394,7 +403,7 @@ def build_app() -> gr.Blocks:
                     return {}, [], f"Error: {e}"
 
             transcribe_btn.click(on_transcribe, inputs=[audio_input], outputs=[transcript_box])
-            audio_input.stop_recording(on_transcribe, inputs=[audio_input], outputs=[transcript_box])
+            audio_input.stop_recording(on_transcribe, outputs=[transcript_box])
             process_btn.click(
                 on_process,
                 inputs=[patient_id_box, doctor_id_box, transcript_box],
