@@ -263,7 +263,7 @@ def structure_transcript(transcript: str) -> dict:
         max_tokens=1024,
         temperature=0.1,
     )
-
+    print("Raw response:", response)
     content = response["choices"][0]["message"]["content"].strip()
 
     # Strip markdown fences if present
