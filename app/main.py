@@ -157,9 +157,8 @@ def extract_medical_entities(text: str, top_k: int = 5) -> list[dict]:
         if idx >= 0 and float(score) > 0.5:  # confidence threshold
             meta = _faiss_metadata[idx]
             results.append({
-                "term": meta["term"],
+                "term": meta["term"],       # English SNOMED term
                 "concept_id": meta["concept_id"],
-                "language": meta["language"],
                 "score": float(score),
             })
     return results
