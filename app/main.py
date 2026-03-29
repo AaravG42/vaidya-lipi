@@ -817,7 +817,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
     for i, r in enumerate(parsed):
         r["cluster"] = int(cluster_labels[i])
 
-    # ── 5. Anomaly score = cosine distance to assigned centroid ───────────────
+      # ── 5. Anomaly score = cosine distance to assigned centroid ───────────────
     def cosine_dist(vec, centroid):
         dot  = np.dot(vec, centroid)
         norm = np.linalg.norm(vec) * np.linalg.norm(centroid)
@@ -835,7 +835,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         r["anomaly_score"] = float(scores[i])
         r["is_anomaly"]    = bool(anomaly_flags[i])
 
-    # ── 6. Cluster profiles ───────────────────────────────────────────────────
+    # ── 6. Cluster profiles — MUST be before figures ──────────────────────────
     cluster_profiles = {}
     for cid in range(best_k):
         members  = [r for r in parsed if r["cluster"] == cid]
@@ -850,7 +850,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
             "top_diagnoses": [d for d,_ in top_dx],
         }
 
-    # ── 7. Temporal daily symptom counts ─────────────────────────────────────
+    # ── 7. Temporal daily symptom counts — MUST be before figures ────────────
     daily_sym = defaultdict(lambda: defaultdict(int))
     for r in parsed:
         day = str(r.get("visit_date",""))[:10]
