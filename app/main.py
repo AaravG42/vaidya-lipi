@@ -759,7 +759,8 @@ def build_app() -> gr.Blocks:
             process_btn.click(
                 fn=on_process,
                 inputs=[transcript_box],
-                outputs=[results_html, structured_state, entities_state, save_btn, save_status]
+                outputs=[results_html, structured_state, entities_state, save_btn, save_status],
+                show_progress="full"   # ADD THIS
             )
             save_btn.click(
                 fn=on_save,
