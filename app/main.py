@@ -8,6 +8,61 @@ _SRC = _ROOT / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+CSS = """
+        .section-header { font-size:15px; font-weight:600; color:#2d3748; margin:8px 0 4px }
+        .stat-card       { background:#f7fafc; border-radius:8px; padding:12px 16px; text-align:center }
+        .stat-num        { font-size:28px; font-weight:700; color:#2b6cb0 }
+        .stat-label      { font-size:12px; color:#718096; margin-top:2px }
+        footer           { visibility:hidden }
+
+        /* ── Dark mode: dataframe tables ─────────────────────────────────── */
+        .dark-table table,
+        .dark .dark-table table {
+            background: transparent !important;
+        }
+        .dark-table thead tr th,
+        .dark .dark-table thead tr th {
+            background: var(--background-fill-secondary) !important;
+            color: var(--body-text-color) !important;
+            border-bottom: 1px solid var(--border-color-primary) !important;
+        }
+        .dark-table tbody tr td,
+        .dark .dark-table tbody tr td {
+            background: var(--background-fill-primary) !important;
+            color: var(--body-text-color) !important;
+            border-bottom: 1px solid var(--border-color-primary) !important;
+        }
+        .dark-table tbody tr:hover td,
+        .dark .dark-table tbody tr:hover td {
+            background: var(--background-fill-secondary) !important;
+        }
+
+        /* ── Dark mode: textbox fields ───────────────────────────────────── */
+        .dark-field textarea,
+        .dark-field input,
+        .dark .dark-field textarea,
+        .dark .dark-field input {
+            background: var(--background-fill-primary) !important;
+            color: var(--body-text-color) !important;
+            border: 1px solid var(--border-color-primary) !important;
+        }
+        .dark-field label span,
+        .dark .dark-field label span {
+            color: var(--body-text-color) !important;
+        }
+
+        /* ── Light mode stat cards ───────────────────────────────────────── */
+        @media (prefers-color-scheme: dark) {
+            .stat-card  { background: var(--background-fill-secondary) }
+            .stat-num   { color: #63b3ed }
+            .stat-label { color: var(--body-text-color-subdued) }
+        }
+        .dark .stat-card  { background: var(--background-fill-secondary) }
+        .dark .stat-num   { color: #63b3ed }
+        .dark .stat-label { color: var(--body-text-color-subdued) }
+        """
+
+
 import gradio as gr
 import numpy as np
 
@@ -652,13 +707,12 @@ def build_app() -> gr.Blocks:
         structured_state = gr.State({})
         entities_state   = gr.State([])
 
-        # ── Tab 1: Record Consultation ────────────────────────────────────────
         with gr.Tab("📝 Record Consultation"):
 
             with gr.Row():
                 patient_id_box = gr.Textbox(
                     label="Patient ID (ABHA ID or local ID)",
-                    placeholder="e.g. PAT1234",
+                    placeholder="e.g. PAT1234 or 14-digit ABHA",
                     scale=3
                 )
                 doctor_id_box = gr.Textbox(
@@ -682,18 +736,62 @@ def build_app() -> gr.Blocks:
             )
 
             with gr.Row():
-                transcribe_btn = gr.Button("🎙️ Transcribe Audio", variant="secondary", scale=1)
-                process_btn    = gr.Button("⚙️  Analyse Transcript", variant="secondary", scale=1)
-                save_btn       = gr.Button("💾  Save Record", variant="primary", scale=1, interactive=False)
+                transcribe_btn = gr.Button("🎙️ Transcribe Audio",     variant="secondary", scale=1)
+                process_btn    = gr.Button("⚙️  Analyse Transcript",   variant="secondary", scale=1)
+                save_btn       = gr.Button("💾  Save Record",          variant="primary",   scale=1, interactive=False)
 
-            # Results area — hidden until Process is clicked
-            results_html = gr.HTML(visible=False)
-            save_status  = gr.Textbox(label="Status", interactive=False, visible=False)
+            # ── Results — always rendered, start empty ─────────────────────────
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### 🏷️ Symptoms")
+                    symptoms_box = gr.Dataframe(
+                        headers=["Symptom"],
+                        datatype=["str"],
+                        row_count=(1, "dynamic"),
+                        interactive=False,
+                        label=None,
+                        elem_classes=["dark-table"],
+                    )
+                    gr.Markdown("### 💊 Medications")
+                    medications_box = gr.Dataframe(
+                        headers=["Medication"],
+                        datatype=["str"],
+                        row_count=(1, "dynamic"),
+                        interactive=False,
+                        label=None,
+                        elem_classes=["dark-table"],
+                    )
+                    gr.Markdown("### 🩺 Diagnosis")
+                    diagnosis_box = gr.Textbox(
+                        label=None,
+                        interactive=False,
+                        lines=2,
+                        elem_classes=["dark-field"],
+                    )
 
-            # ── Handlers ──────────────────────────────────────────────────────
+                with gr.Column():
+                    gr.Markdown("### 📋 SOAP Note")
+                    soap_s_box = gr.Textbox(label="S — Subjective", interactive=False, lines=2, elem_classes=["dark-field"])
+                    soap_o_box = gr.Textbox(label="O — Objective",  interactive=False, lines=2, elem_classes=["dark-field"])
+                    soap_a_box = gr.Textbox(label="A — Assessment", interactive=False, lines=2, elem_classes=["dark-field"])
+                    soap_p_box = gr.Textbox(label="P — Plan",       interactive=False, lines=3, elem_classes=["dark-field"])
+
+                    gr.Markdown("### 🔬 SNOMED Entities")
+                    entities_box_display = gr.Dataframe(
+                        headers=["Term", "SNOMED Code", "Score"],
+                        datatype=["str", "str", "number"],
+                        row_count=(1, "dynamic"),
+                        interactive=False,
+                        label=None,
+                        elem_classes=["dark-table"],
+                    )
+
+            save_status = gr.Textbox(label="Status", interactive=False, elem_classes=["dark-field"])
+
+            # ── Handlers ───────────────────────────────────────────────────────
             def on_transcribe(audio):
                 if audio is None:
-                    return "No audio recorded."
+                    return "No audio recorded. Please use the microphone."
                 try:
                     transcript, lang = transcribe_audio(audio)
                     return f"[{lang}] {transcript}"
@@ -701,39 +799,44 @@ def build_app() -> gr.Blocks:
                     return f"Transcription error: {e}"
 
             def on_process(transcript, progress=gr.Progress()):
+                empty = ([], [], "", "", "", "", "", [], {}, [], gr.update(interactive=False), "")
                 if not transcript.strip():
-                    return (
-                        gr.update(visible=False), {}, [],
-                        gr.update(interactive=False), gr.update(visible=False),
-                    )
+                    return empty
                 try:
-                    progress(0, desc="Analysing transcript with LLM...")
+                    progress(0,   desc="Sending transcript to LLM...")
                     structured = structure_transcript(transcript)
 
-                    progress(0.6, desc="Extracting medical entities (SNOMED)...")
+                    progress(0.6, desc="Extracting SNOMED entities with Parrotlet-e...")
                     entities = extract_medical_entities(transcript)
 
+                    progress(0.9, desc="Rendering results...")
+
+                    symptoms  = [[s] for s in structured.get("symptoms", [])]
+                    meds      = [[m] for m in structured.get("medications", [])]
+                    ent_rows  = [[e["term"], e["concept_id"], round(e["score"], 3)] for e in entities]
+
                     progress(1.0, desc="Done")
-                    html = render_soap_html(structured, entities)
                     return (
-                        gr.update(value=html, visible=True),
+                        symptoms,
+                        meds,
+                        structured.get("diagnosis", ""),
+                        structured.get("soap_s", ""),
+                        structured.get("soap_o", ""),
+                        structured.get("soap_a", ""),
+                        structured.get("soap_p", ""),
+                        ent_rows,
                         structured,
                         entities,
                         gr.update(interactive=True),
-                        gr.update(visible=False),
+                        "",
                     )
                 except Exception as e:
                     logging.exception("process error")
-                    return (
-                        gr.update(value=f"<p style='color:red'>Error: {e}</p>", visible=True),
-                        {}, [],
-                        gr.update(interactive=False),
-                        gr.update(visible=False),
-                    )
+                    return ([], [], f"Error: {e}", "", "", "", "", [], {}, [], gr.update(interactive=False), f"❌ {e}")
 
             def on_save(patient_id, doctor_id, transcript, structured, entities):
                 if not structured:
-                    return gr.update(value="Nothing to save — process first.", visible=True)
+                    return "Nothing to save — analyse first."
                 try:
                     record_id = save_record(
                         patient_id=patient_id or "UNKNOWN",
@@ -743,30 +846,35 @@ def build_app() -> gr.Blocks:
                         entities=entities,
                         language="mixed"
                     )
-                    return gr.update(
-                        value=f"✅ Saved successfully. Record ID: `{record_id}`",
-                        visible=True
-                    )
+                    return f"✅ Saved. Record ID: {record_id}"
                 except Exception as e:
                     logging.exception("save error")
-                    return gr.update(value=f"❌ Save failed: {e}", visible=True)
+                    return f"❌ Save failed: {e}"
 
             transcribe_btn.click(
                 fn=on_transcribe,
                 inputs=[audio_input],
-                outputs=[transcript_box]
+                outputs=[transcript_box],
+                show_progress="full",
             )
             process_btn.click(
                 fn=on_process,
                 inputs=[transcript_box],
-                outputs=[results_html, structured_state, entities_state, save_btn, save_status],
-                show_progress="full"   # ADD THIS
+                outputs=[
+                    symptoms_box, medications_box, diagnosis_box,
+                    soap_s_box, soap_o_box, soap_a_box, soap_p_box,
+                    entities_box_display,
+                    structured_state, entities_state,
+                    save_btn, save_status,
+                ],
+                show_progress="full",
             )
             save_btn.click(
                 fn=on_save,
                 inputs=[patient_id_box, doctor_id_box, transcript_box,
                         structured_state, entities_state],
-                outputs=[save_status]
+                outputs=[save_status],
+                show_progress="full",
             )
 
         # ── Tab 2: My Dashboard ───────────────────────────────────────────────
