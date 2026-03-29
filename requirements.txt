@@ -14,3 +14,4 @@ datasets
 openai
 databricks-sql-connector
 scikit-learn
+plotly

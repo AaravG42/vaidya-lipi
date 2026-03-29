@@ -8,6 +8,16 @@ _SRC = _ROOT / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+
+GREEN_SCALE = [
+    "#1a4731", "#276749", "#2f855a", "#38a169",
+    "#48bb78", "#68d391", "#9ae6b4", "#c6f6d5"
+]
+
+
 CSS = """
         .section-header { font-size:15px; font-weight:600; color:#2d3748; margin:8px 0 4px }
         .stat-card       { background:#f0fff4; border-radius:8px; padding:12px 16px; text-align:center }
@@ -606,86 +616,114 @@ def fetch_patient_last_visit(patient_id: str) -> str:
 
 # ── Chart helpers ─────────────────────────────────────────────────────────────
 
-def make_symptom_chart(top_symptoms: list, title: str):
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
+PLOTLY_LAYOUT = dict(
+    template="plotly_dark",
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="sans-serif", size=12),
+    margin=dict(l=10, r=10, t=40, b=10),
+    hoverlabel=dict(bgcolor="#1a202c", font_size=12),
+)
+
+
+def make_symptom_chart(top_symptoms: list, title: str):
     if not top_symptoms:
-        fig, ax = plt.subplots(figsize=(6, 2))
-        ax.text(0.5, 0.5, "No data yet", ha="center", va="center", fontsize=13, color="#888")
-        ax.axis("off")
+        fig = go.Figure()
+        fig.add_annotation(text="No data yet", x=0.5, y=0.5,
+                           showarrow=False, font=dict(size=14, color="#68d391"))
+        fig.update_layout(title=title, **PLOTLY_LAYOUT)
         return fig
 
     labels = [s[0] for s in top_symptoms][::-1]
     values = [s[1] for s in top_symptoms][::-1]
-    colors = ["#4299e1","#48bb78","#ed8936","#9f7aea","#fc8181"][:len(labels)]
+    colors = GREEN_SCALE[2:2+len(labels)][::-1]
 
-    fig, ax = plt.subplots(figsize=(6, max(3, len(labels)*0.6)))
-    bars = ax.barh(labels, values, color=colors, edgecolor="none", height=0.5)
-    ax.bar_label(bars, padding=4, fontsize=11)
-    ax.set_xlabel("Patients", fontsize=11)
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
-    ax.spines[["top","right","left"]].set_visible(False)
-    ax.tick_params(left=False)
-    ax.set_xlim(0, max(values) * 1.25)
-    fig.tight_layout()
+    fig = go.Figure(go.Bar(
+        x=values, y=labels,
+        orientation="h",
+        marker=dict(color=colors, line=dict(width=0)),
+        text=values, textposition="outside",
+        hovertemplate="<b>%{y}</b><br>Patients: %{x}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#9ae6b4")),
+        xaxis=dict(title="Patients", gridcolor="#2d3748", showgrid=True),
+        yaxis=dict(gridcolor="#2d3748", showgrid=False),
+        showlegend=False,
+        **PLOTLY_LAYOUT,
+    )
     return fig
 
 
 def make_language_chart(lang_dict: dict, title: str):
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
     if not lang_dict:
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.text(0.5, 0.5, "No data yet", ha="center", va="center")
-        ax.axis("off")
+        fig = go.Figure()
+        fig.add_annotation(text="No data yet", x=0.5, y=0.5,
+                           showarrow=False, font=dict(size=14, color="#68d391"))
+        fig.update_layout(title=title, **PLOTLY_LAYOUT)
         return fig
 
-    label_map = {"en-IN":"English","hi-IN":"Hindi","mr-IN":"Marathi",
-                 "ta-IN":"Tamil","te-IN":"Telugu","kn-IN":"Kannada","mixed":"Mixed"}
+    label_map = {
+        "en-IN": "English", "hi-IN": "Hindi", "mr-IN": "Marathi",
+        "ta-IN": "Tamil",   "te-IN": "Telugu", "kn-IN": "Kannada",
+        "mixed": "Mixed"
+    }
     labels = [label_map.get(k, k) for k in lang_dict.keys()]
     values = list(lang_dict.values())
-    colors = ["#4299e1","#48bb78","#ed8936","#9f7aea","#fc8181","#76e4f7","#f6ad55"]
 
-    fig, ax = plt.subplots(figsize=(4, 4))
-    ax.pie(values, labels=labels, autopct="%1.0f%%",
-           colors=colors[:len(values)], startangle=90,
-           wedgeprops={"edgecolor":"white","linewidth":2})
-    ax.set_title(title, fontsize=12, fontweight="bold")
-    fig.tight_layout()
+    fig = go.Figure(go.Pie(
+        labels=labels,
+        values=values,
+        marker=dict(colors=GREEN_SCALE[1:1+len(labels)],
+                    line=dict(color="#1a202c", width=2)),
+        hole=0.4,
+        textinfo="label+percent",
+        hovertemplate="<b>%{label}</b><br>Patients: %{value}<br>%{percent}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#9ae6b4")),
+        showlegend=True,
+        legend=dict(orientation="v", font=dict(size=11)),
+        **PLOTLY_LAYOUT,
+    )
     return fig
 
 
 def make_daily_volume_chart(rows: list, title: str):
-    """rows: list of (date_str, count)"""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from collections import OrderedDict
-
     if not rows:
-        fig, ax = plt.subplots(figsize=(6, 3))
-        ax.text(0.5, 0.5, "No data yet", ha="center", va="center")
-        ax.axis("off")
+        fig = go.Figure()
+        fig.add_annotation(text="No data yet", x=0.5, y=0.5,
+                           showarrow=False, font=dict(size=14, color="#68d391"))
+        fig.update_layout(title=title, **PLOTLY_LAYOUT)
         return fig
 
+    from collections import OrderedDict
     data = OrderedDict(sorted(rows))
-    dates = list(data.keys())
+    dates  = list(data.keys())
     counts = list(data.values())
 
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.plot(dates, counts, marker="o", color="#4299e1", linewidth=2, markersize=6)
-    ax.fill_between(dates, counts, alpha=0.15, color="#4299e1")
-    ax.set_title(title, fontsize=12, fontweight="bold")
-    ax.set_ylabel("Patients")
-    ax.spines[["top","right"]].set_visible(False)
-    plt.xticks(rotation=30, ha="right", fontsize=9)
-    fig.tight_layout()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=dates, y=counts,
+        mode="lines+markers",
+        line=dict(color="#48bb78", width=2.5),
+        marker=dict(size=7, color="#38a169",
+                    line=dict(color="#9ae6b4", width=1.5)),
+        fill="tozeroy",
+        fillcolor="rgba(72,187,120,0.12)",
+        hovertemplate="<b>%{x}</b><br>Patients: %{y}<extra></extra>",
+        name="Patients",
+    ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#9ae6b4")),
+        xaxis=dict(title="Date", gridcolor="#2d3748",
+                   tickangle=-30, showgrid=True),
+        yaxis=dict(title="Patients", gridcolor="#2d3748", showgrid=True),
+        showlegend=False,
+        **PLOTLY_LAYOUT,
+    )
     return fig
-
 
 # ── Dashboard data fetchers ───────────────────────────────────────────────────
 
@@ -798,141 +836,230 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         for s in r["symptoms"]:
             daily_sym[day][s] += 1
 
-    # ══ FIGURES ══════════════════════════════════════════════════════════════
+   # ══ FIGURES — all Plotly ══════════════════════════════════════════════════
 
     # Fig 1 — Silhouette scores
-    fig1, ax = plt.subplots(figsize=(7, 3.5))
     ks = list(sil_scores.keys())
     ss = list(sil_scores.values())
-    bar_colors = [GREEN[3] if k == best_k else GREEN[5] for k in ks]
-    bars = ax.bar(ks, ss, color=bar_colors, edgecolor="none", width=0.5)
-    ax.bar_label(bars, fmt="%.3f", padding=4, fontsize=9)
-    ax.axvline(best_k, color=GREEN[1], linestyle="--", linewidth=1.5,
-               label=f"Best K={best_k} ({sil_scores[best_k]:.3f})")
-    ax.set_xlabel("Number of Clusters (K)", fontsize=11)
-    ax.set_ylabel("Silhouette Score", fontsize=11)
-    ax.set_title("K-Means: Silhouette Score by K", fontsize=13, fontweight="bold")
-    ax.legend(fontsize=9)
-    ax.spines[["top","right"]].set_visible(False)
-    ax.set_ylim(0, max(ss) * 1.25 if ss else 1)
-    fig1.tight_layout()
+    bar_colors = [GREEN_SCALE[3] if k == best_k else GREEN_SCALE[5] for k in ks]
 
-    # Fig 2 — Cluster symptom profiles (horizontal bars)
-    cluster_profiles = {}
+    fig1 = go.Figure(go.Bar(
+        x=ks, y=ss,
+        marker=dict(color=bar_colors, line=dict(width=0)),
+        text=[f"{s:.3f}" for s in ss],
+        textposition="outside",
+        hovertemplate="K=%{x}<br>Silhouette: %{y:.4f}<extra></extra>",
+    ))
+    fig1.add_vline(
+        x=best_k, line_dash="dash", line_color="#9ae6b4", line_width=2,
+        annotation_text=f"Best K={best_k}",
+        annotation_font_color="#9ae6b4",
+    )
+    fig1.update_layout(
+        title=dict(text="K-Means: Silhouette Score by K",
+                   font=dict(size=14, color="#9ae6b4")),
+        xaxis=dict(title="Number of Clusters (K)", dtick=1,
+                   gridcolor="#2d3748"),
+        yaxis=dict(title="Silhouette Score", gridcolor="#2d3748",
+                   range=[0, max(ss) * 1.25 if ss else 1]),
+        showlegend=False,
+        **PLOTLY_LAYOUT,
+    )
+
+    # Fig 2 — Cluster profiles (subplots, one bar chart per cluster)
+    fig2 = make_subplots(
+        rows=1, cols=best_k,
+        subplot_titles=[
+            f"Cluster {cid} — {cluster_profiles[cid]['size']} patients<br>"
+            f"<sup>{', '.join(cluster_profiles[cid]['top_diagnoses'][:2]) or '—'}</sup>"
+            for cid in range(best_k)
+        ]
+    )
     for cid in range(best_k):
-        members = [r for r in parsed if r["cluster"] == cid]
-        all_sym = [s for r in members for s in r["symptoms"]]
-        top = Counter(all_sym).most_common(6)
-        top_dx = Counter([r.get("diagnosis","?") for r in members
-                          if r.get("diagnosis")]).most_common(2)
-        cluster_profiles[cid] = {
-            "size": len(members),
-            "top_symptoms": top,
-            "top_diagnoses": [d for d,_ in top_dx],
-        }
-
-    fig2, axes = plt.subplots(1, best_k,
-                              figsize=(max(5 * best_k, 10), 5),
-                              sharey=False)
-    if best_k == 1:
-        axes = [axes]
-    for ax, (cid, prof) in zip(axes, cluster_profiles.items()):
+        prof   = cluster_profiles[cid]
         syms   = [s for s,_ in prof["top_symptoms"]][::-1]
         counts = [c for _,c in prof["top_symptoms"]][::-1]
-        color  = GREEN[2 + cid % 4]
-        b = ax.barh(syms, counts, color=color, edgecolor="none", height=0.55)
-        ax.bar_label(b, padding=3, fontsize=9)
-        dx_label = ", ".join(prof["top_diagnoses"][:2]) or "—"
-        ax.set_title(
-            f"Cluster {cid}  ({prof['size']} patients)\n"
-            f"📋 {dx_label}",
-            fontsize=10, fontweight="bold", color=GREEN[1]
+        color  = GREEN_SCALE[2 + cid % 4]
+        fig2.add_trace(
+            go.Bar(
+                x=counts, y=syms,
+                orientation="h",
+                marker=dict(color=color, line=dict(width=0)),
+                text=counts, textposition="outside",
+                hovertemplate="<b>%{y}</b><br>Frequency: %{x}<extra></extra>",
+                showlegend=False,
+            ),
+            row=1, col=cid + 1
         )
-        ax.set_xlabel("Frequency", fontsize=9)
-        ax.spines[["top","right","left"]].set_visible(False)
-        ax.tick_params(left=False)
-        ax.set_xlim(0, max(counts) * 1.3 if counts else 1)
-    fig2.suptitle("Symptom Clusters — What groups of patients look alike?",
-                  fontsize=13, fontweight="bold")
-    fig2.tight_layout()
+    fig2.update_layout(
+        title=dict(text="Symptom Profiles per Cluster",
+                   font=dict(size=14, color="#9ae6b4")),
+        height=420,
+        **PLOTLY_LAYOUT,
+    )
+    for i in range(1, best_k + 1):
+        fig2.update_xaxes(gridcolor="#2d3748", row=1, col=i)
+        fig2.update_yaxes(gridcolor="#2d3748", showgrid=False, row=1, col=i)
 
-    # Fig 3 — PCA scatter (2D projection of clusters)
+    # Fig 3 — PCA scatter
     pca = PCA(n_components=2, random_state=42)
     X_2d = pca.fit_transform(X)
-    fig3, ax = plt.subplots(figsize=(7, 5))
+
+    fig3 = go.Figure()
     for cid in range(best_k):
         mask = cluster_labels == cid
-        ax.scatter(X_2d[mask, 0], X_2d[mask, 1],
-                   c=GREEN[2 + cid % 4], label=f"Cluster {cid}",
-                   alpha=0.75, edgecolors="white", linewidths=0.5, s=60)
-    # Mark anomalies with red rings
-    anom_mask = np.array([r["is_anomaly"] for r in parsed])
-    ax.scatter(X_2d[anom_mask, 0], X_2d[anom_mask, 1],
-               facecolors="none", edgecolors="#e53e3e",
-               linewidths=1.8, s=130, label="⚠ Anomaly", zorder=5)
-    ax.set_title("Patient Clusters — PCA Projection\n(red rings = anomalies)",
-                 fontsize=12, fontweight="bold")
-    ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% variance)")
-    ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% variance)")
-    ax.legend(fontsize=9)
-    ax.spines[["top","right"]].set_visible(False)
-    fig3.tight_layout()
+        members = [parsed[i] for i in range(len(parsed)) if mask[i]]
+        hover_text = [
+            f"Patient: {r['patient_id']}<br>"
+            f"Symptoms: {', '.join(r['symptoms'][:3])}<br>"
+            f"Diagnosis: {r.get('diagnosis','—')}"
+            for r in members
+        ]
+        fig3.add_trace(go.Scatter(
+            x=X_2d[mask, 0],
+            y=X_2d[mask, 1],
+            mode="markers",
+            name=f"Cluster {cid}",
+            marker=dict(
+                color=GREEN_SCALE[2 + cid % 4],
+                size=9,
+                opacity=0.8,
+                line=dict(color="#1a202c", width=0.5),
+            ),
+            text=hover_text,
+            hovertemplate="%{text}<extra></extra>",
+        ))
+
+    # Anomaly ring overlay
+    anom_indices = [i for i, r in enumerate(parsed) if r["is_anomaly"]]
+    if anom_indices:
+        anom_hover = [
+            f"⚠ ANOMALY<br>Patient: {parsed[i]['patient_id']}<br>"
+            f"Score: {parsed[i]['anomaly_score']:.3f}<br>"
+            f"Symptoms: {', '.join(parsed[i]['symptoms'][:3])}"
+            for i in anom_indices
+        ]
+        fig3.add_trace(go.Scatter(
+            x=X_2d[anom_indices, 0],
+            y=X_2d[anom_indices, 1],
+            mode="markers",
+            name="⚠ Anomaly",
+            marker=dict(
+                color="rgba(0,0,0,0)",
+                size=18,
+                line=dict(color="#fc8181", width=2.5),
+            ),
+            text=anom_hover,
+            hovertemplate="%{text}<extra></extra>",
+        ))
+
+    fig3.update_layout(
+        title=dict(
+            text=f"Patient Clusters — PCA Projection"
+                 f"<br><sup>PC1: {pca.explained_variance_ratio_[0]*100:.1f}% variance · "
+                 f"PC2: {pca.explained_variance_ratio_[1]*100:.1f}% variance · "
+                 f"Red rings = anomalies</sup>",
+            font=dict(size=14, color="#9ae6b4")
+        ),
+        xaxis=dict(title="PC1", gridcolor="#2d3748", zeroline=False),
+        yaxis=dict(title="PC2", gridcolor="#2d3748", zeroline=False),
+        legend=dict(orientation="v", font=dict(size=11)),
+        **PLOTLY_LAYOUT,
+    )
 
     # Fig 4 — Anomaly score distribution
-    fig4, ax = plt.subplots(figsize=(7, 4))
+    fig4 = go.Figure()
     for cid in range(best_k):
         mask = cluster_labels == cid
-        ax.hist(scores[mask], bins=12, alpha=0.6,
-                color=GREEN[2 + cid % 4], label=f"Cluster {cid}", edgecolor="none")
-    ax.axvline(threshold, color="#e53e3e", linewidth=2, linestyle="--",
-               label=f"Anomaly threshold ({threshold:.3f})")
-    ax.axvline(mean_s, color=GREEN[1], linewidth=1.5, linestyle=":",
-               label=f"Mean ({mean_s:.3f})")
-    ax.set_xlabel("Anomaly Score (cosine distance to centroid)", fontsize=11)
-    ax.set_ylabel("Number of records", fontsize=11)
-    ax.set_title(f"Anomaly Distribution — {anomaly_flags.sum()} anomalies flagged",
-                 fontsize=12, fontweight="bold")
-    ax.legend(fontsize=9)
-    ax.spines[["top","right"]].set_visible(False)
-    fig4.tight_layout()
+        fig4.add_trace(go.Histogram(
+            x=scores[mask],
+            name=f"Cluster {cid}",
+            marker=dict(color=GREEN_SCALE[2 + cid % 4],
+                        line=dict(width=0)),
+            opacity=0.7,
+            nbinsx=15,
+            hovertemplate="Score: %{x:.3f}<br>Count: %{y}<extra></extra>",
+        ))
+    fig4.add_vline(
+        x=float(threshold), line_dash="dash", line_color="#fc8181", line_width=2,
+        annotation_text=f"Threshold ({threshold:.3f})",
+        annotation_font_color="#fc8181",
+    )
+    fig4.add_vline(
+        x=float(mean_s), line_dash="dot", line_color="#9ae6b4", line_width=1.5,
+        annotation_text=f"Mean ({mean_s:.3f})",
+        annotation_font_color="#9ae6b4",
+        annotation_position="bottom right",
+    )
+    fig4.update_layout(
+        title=dict(
+            text=f"Anomaly Score Distribution — {anomaly_flags.sum()} flagged",
+            font=dict(size=14, color="#9ae6b4")
+        ),
+        xaxis=dict(title="Cosine distance to centroid", gridcolor="#2d3748"),
+        yaxis=dict(title="Records", gridcolor="#2d3748"),
+        barmode="overlay",
+        legend=dict(font=dict(size=11)),
+        **PLOTLY_LAYOUT,
+    )
 
-    # Fig 5 — Temporal symptom spikes (top 5 symptoms over time)
+    # Fig 5 — Temporal symptom trends
     all_sym_flat = Counter([s for r in parsed for s in r["symptoms"]])
     top5 = [s for s, _ in all_sym_flat.most_common(5)]
     days_sorted = sorted(daily_sym.keys())
 
-    fig5, ax = plt.subplots(figsize=(9, 4))
+    fig5 = go.Figure()
     for i, sym in enumerate(top5):
         counts_by_day = [daily_sym[d].get(sym, 0) for d in days_sorted]
         if max(counts_by_day) == 0:
             continue
-        ax.plot(days_sorted, counts_by_day,
-                marker="o", markersize=5, linewidth=2,
-                color=GREEN[1 + i], label=sym)
+        color = GREEN_SCALE[1 + i % 6]
+        fig5.add_trace(go.Scatter(
+            x=days_sorted,
+            y=counts_by_day,
+            mode="lines+markers",
+            name=sym,
+            line=dict(color=color, width=2),
+            marker=dict(size=6, color=color),
+            hovertemplate=f"<b>{sym}</b><br>Date: %{{x}}<br>Cases: %{{y}}<extra></extra>",
+        ))
 
-        # Spike detection: flag days > mean + 2σ for this symptom
+        # Spike markers
         arr = np.array(counts_by_day, dtype=float)
         if arr.std() > 0:
             spike_thresh = arr.mean() + 2 * arr.std()
-            for j, (day, val) in enumerate(zip(days_sorted, counts_by_day)):
-                if val > spike_thresh:
-                    ax.annotate("⚠", xy=(day, val),
-                                fontsize=13, color="#e53e3e",
-                                ha="center", va="bottom")
+            spike_days   = [days_sorted[j] for j, v in enumerate(counts_by_day)
+                            if v > spike_thresh]
+            spike_vals   = [counts_by_day[j] for j, v in enumerate(counts_by_day)
+                            if v > spike_thresh]
+            if spike_days:
+                fig5.add_trace(go.Scatter(
+                    x=spike_days, y=spike_vals,
+                    mode="markers",
+                    marker=dict(symbol="triangle-up", size=14,
+                                color="#fc8181",
+                                line=dict(color="#fff", width=1)),
+                    name=f"⚠ {sym} spike",
+                    hovertemplate=f"⚠ SPIKE: {sym}<br>Date: %{{x}}<br>Cases: %{{y}}<extra></extra>",
+                    showlegend=True,
+                ))
 
-    ax.set_title("Symptom Trends Over Time\n(⚠ = statistical spike, >2σ above mean)",
-                 fontsize=12, fontweight="bold")
-    ax.set_ylabel("Cases per day", fontsize=10)
-    ax.legend(fontsize=9, loc="upper left")
-    ax.spines[["top","right"]].set_visible(False)
-    plt.xticks(rotation=35, ha="right", fontsize=8)
-    fig5.tight_layout()
+    fig5.update_layout(
+        title=dict(
+            text="Symptom Trends Over Time  <sup>▲ = statistical spike (>2σ)</sup>",
+            font=dict(size=14, color="#9ae6b4")
+        ),
+        xaxis=dict(title="Date", gridcolor="#2d3748", tickangle=-30),
+        yaxis=dict(title="Cases per day", gridcolor="#2d3748"),
+        legend=dict(orientation="v", font=dict(size=10)),
+        **PLOTLY_LAYOUT,
+    )
 
-    # Anomaly table data
+    # Anomaly table rows (unchanged)
     anomaly_rows = [
         [r["patient_id"], r["doctor_id"],
          ", ".join(r["symptoms"][:3]),
-         r.get("diagnosis","—"),
+         r.get("diagnosis", "—"),
          f"{r['anomaly_score']:.3f}",
          f"Cluster {r['cluster']}"]
         for r in sorted(parsed, key=lambda x: -x["anomaly_score"])
@@ -941,7 +1068,7 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
 
     summary = (
         f"**{len(parsed)}** records analysed · "
-        f"**{best_k}** clusters found · "
+        f"**{best_k}** clusters (best silhouette: {sil_scores[best_k]:.3f}) · "
         f"**{anomaly_flags.sum()}** anomalies flagged "
         f"(threshold {threshold:.3f})"
     )
