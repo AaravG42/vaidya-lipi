@@ -308,7 +308,7 @@ def _get_sql_connection():
 def save_record(patient_id: str, doctor_id: str, transcript: str,
                 structured: dict, entities: list, language: str) -> str:
     record_id = str(uuid.uuid4())
-    now = datetime.now().strftime("%Y-%m-%d %Human:%M:%S")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     symptoms    = json.dumps(structured.get("symptoms", []))
     medications = json.dumps(structured.get("medications", []))
     snomed_codes = json.dumps([e["concept_id"] for e in entities])
@@ -508,7 +508,7 @@ def build_app() -> gr.Blocks:
             alerts_refresh = gr.Button("Load Alerts")
             alerts_display = gr.JSON(label="Current Alerts")
 
-           def load_alerts():
+            def load_alerts():
                 query = """
                     SELECT alert_id, generated_at, insight_text, severity
                     FROM workspace.vaidya.health_alerts
