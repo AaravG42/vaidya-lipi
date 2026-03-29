@@ -382,323 +382,65 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
         "languages": languages,
     }
 
-_CUSTOM_CSS = """
-/* ── Global ── */
-:root {
-    --vl-primary: #2563eb;
-    --vl-primary-hover: #1d4ed8;
-    --vl-accent: #0d9488;
-    --vl-bg: #f8fafc;
-    --vl-surface: #ffffff;
-    --vl-border: #e2e8f0;
-    --vl-text: #1e293b;
-    --vl-text-muted: #64748b;
-    --vl-success: #059669;
-    --vl-radius: 12px;
-}
-.gradio-container {
-    max-width: 1120px !important;
-    margin: 0 auto !important;
-    background: var(--vl-bg) !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
-}
-footer { display: none !important; }
-
-/* ── Header ── */
-.app-header {
-    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
-    border-radius: var(--vl-radius);
-    padding: 28px 32px;
-    margin-bottom: 24px;
-    color: white;
-    text-align: center;
-}
-.app-header h1 {
-    margin: 0 0 4px 0;
-    font-size: 1.75rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
-.app-header p {
-    margin: 0;
-    opacity: 0.85;
-    font-size: 0.9rem;
-    font-weight: 400;
-}
-
-/* ── Cards ── */
-.card {
-    background: var(--vl-surface);
-    border: 1px solid var(--vl-border);
-    border-radius: var(--vl-radius);
-    padding: 24px;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    transition: box-shadow 0.2s ease;
-}
-.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-
-/* ── Step indicator ── */
-.steps-bar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-}
-.step-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #eff6ff;
-    color: var(--vl-primary);
-    border: 1px solid #bfdbfe;
-    border-radius: 20px;
-    padding: 6px 14px;
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-.step-chip .num {
-    background: var(--vl-primary);
-    color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-}
-
-/* ── Section headers ── */
-.section-title {
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--vl-text-muted);
-    margin: 0 0 12px 0;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--vl-border);
-}
-
-/* ── Buttons ── */
-.btn-primary button {
-    background: var(--vl-primary) !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    padding: 10px 28px !important;
-    font-size: 0.9rem !important;
-    transition: all 0.15s ease !important;
-}
-.btn-primary button:hover {
-    background: var(--vl-primary-hover) !important;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37,99,235,0.3) !important;
-}
-.btn-secondary button {
-    background: var(--vl-surface) !important;
-    border: 1.5px solid var(--vl-border) !important;
-    border-radius: 8px !important;
-    font-weight: 500 !important;
-    color: var(--vl-text) !important;
-    padding: 10px 28px !important;
-    font-size: 0.9rem !important;
-    transition: all 0.15s ease !important;
-}
-.btn-secondary button:hover {
-    background: #f1f5f9 !important;
-    border-color: #cbd5e1 !important;
-}
-
-/* ── Status bar ── */
-.status-bar textarea, .status-bar input {
-    background: #f0fdf4 !important;
-    border: 1px solid #bbf7d0 !important;
-    border-radius: 8px !important;
-    color: var(--vl-success) !important;
-    font-weight: 500 !important;
-    font-size: 0.85rem !important;
-}
-
-/* ── Dashboard stat card ── */
-.stat-card {
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-    border: 1px solid #bfdbfe;
-    border-radius: var(--vl-radius);
-    padding: 20px 24px;
-    text-align: center;
-}
-.stat-card .stat-value {
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: var(--vl-primary);
-    line-height: 1;
-    margin-bottom: 4px;
-}
-.stat-card .stat-label {
-    font-size: 0.8rem;
-    color: var(--vl-text-muted);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-/* ── Alert badge ── */
-.alert-info {
-    background: #fefce8;
-    border: 1px solid #fde68a;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 0.85rem;
-    color: #92400e;
-    margin-bottom: 12px;
-}
-
-/* ── Tabs ── */
-.tabs > .tab-nav > button {
-    font-weight: 600 !important;
-    font-size: 0.9rem !important;
-    padding: 10px 20px !important;
-    border-radius: 8px 8px 0 0 !important;
-}
-.tabs > .tab-nav > button.selected {
-    color: var(--vl-primary) !important;
-    border-bottom: 2px solid var(--vl-primary) !important;
-}
-
-/* ── Inputs ── */
-.gradio-container input, .gradio-container textarea {
-    border-radius: 8px !important;
-    border: 1.5px solid var(--vl-border) !important;
-    transition: border-color 0.15s ease !important;
-}
-.gradio-container input:focus, .gradio-container textarea:focus {
-    border-color: var(--vl-primary) !important;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1) !important;
-}
-
-/* ── JSON display ── */
-.json-holder {
-    border-radius: var(--vl-radius) !important;
-    border: 1px solid var(--vl-border) !important;
-}
-
-/* ── Responsive ── */
-@media (max-width: 768px) {
-    .gradio-container { padding: 8px !important; }
-    .app-header { padding: 20px 16px; }
-    .app-header h1 { font-size: 1.35rem; }
-    .card { padding: 16px; }
-    .steps-bar { flex-direction: column; }
-}
-"""
-
-
 def build_app() -> gr.Blocks:
     with gr.Blocks(
-        theme=gr.themes.Soft(
-            primary_hue="blue",
-            secondary_hue="teal",
-            neutral_hue="slate",
-            font=("Inter", "system-ui", "sans-serif"),
-            radius_size=gr.themes.sizes.radius_md,
-        ),
-        css=_CUSTOM_CSS,
-        title="Vaidya Lipi — AI Medical Scribe",
+        theme=gr.themes.Soft(primary_hue="blue", secondary_hue="teal"),
+        title="Vaidya Lipi — Medical Scribe"
     ) as demo:
 
-        # ── Header ──
-        gr.HTML("""
-            <div class="app-header">
-                <h1>Vaidya Lipi &middot; &#x0935;&#x0948;&#x0926;&#x094D;&#x092F; &#x0932;&#x093F;&#x092A;&#x093F;</h1>
-                <p>AI-Powered Medical Scribe &middot; ABDM-Compatible &middot; Multilingual</p>
-            </div>
-        """)
+        gr.Markdown("# Vaidya Lipi · वैद्य लिपि\n*AI Medical Scribe · ABDM-compatible*")
 
         # State lives OUTSIDE tabs so both tabs can share it
         doctor_id_state = gr.State("DR001")
 
-        # ═══════════════════ Tab 1: Record Consultation ═══════════════════
         with gr.Tab("Record Consultation"):
-
-            # ── Patient & Doctor IDs ──
-            with gr.Group(elem_classes="card"):
-                gr.HTML('<p class="section-title">Patient & Doctor Info</p>')
-                with gr.Row(equal_height=True):
-                    patient_id_box = gr.Textbox(
-                        label="Patient ID",
-                        placeholder="e.g. PAT1234 or 14-digit ABHA",
-                        scale=2,
-                    )
-                    doctor_id_box = gr.Textbox(
-                        label="Doctor ID",
-                        value="DR001",
-                        scale=1,
-                    )
+            with gr.Row():
+                patient_id_box = gr.Textbox(
+                    label="Patient ID (ABHA ID or local ID)",
+                    placeholder="e.g. PAT1234 or 14-digit ABHA",
+                    scale=2
+                )
+                doctor_id_box = gr.Textbox(
+                    label="Doctor ID",
+                    value="DR001",
+                    scale=1
+                )
 
             # Sync the textbox into State whenever it changes
             doctor_id_box.change(
                 fn=lambda x: x,
                 inputs=[doctor_id_box],
-                outputs=[doctor_id_state],
+                outputs=[doctor_id_state]
             )
 
-            # ── Workflow steps ──
-            gr.HTML("""
-                <div class="steps-bar">
-                    <span class="step-chip"><span class="num">1</span> Enter patient ID</span>
-                    <span class="step-chip"><span class="num">2</span> Record audio</span>
-                    <span class="step-chip"><span class="num">3</span> Transcribe</span>
-                    <span class="step-chip"><span class="num">4</span> Structure &amp; save</span>
-                </div>
-            """)
+            gr.Markdown("**Step 1:** Enter patient ID. **Step 2:** Record. **Step 3:** Click Transcribe.")
 
-            # ── Audio + Transcript ──
-            with gr.Group(elem_classes="card"):
-                gr.HTML('<p class="section-title">Consultation Recording</p>')
-                audio_input = gr.Audio(
-                    sources=["microphone"],
-                    type="numpy",
-                    label="Record (Hindi, English, or any Indian language)",
-                )
-                transcript_box = gr.Textbox(
-                    label="Transcript",
-                    lines=4,
-                    placeholder="Transcript will appear here after recording — you can edit before saving.",
-                )
-                with gr.Row():
-                    transcribe_btn = gr.Button(
-                        "Transcribe Audio",
-                        variant="secondary",
-                        elem_classes="btn-secondary",
-                    )
-                    process_btn = gr.Button(
-                        "Structure & Save Record",
-                        variant="primary",
-                        elem_classes="btn-primary",
-                    )
-
-            # ── Results ──
-            with gr.Row(equal_height=True):
-                with gr.Column(scale=3):
-                    with gr.Group(elem_classes="card"):
-                        gr.HTML('<p class="section-title">SOAP Note</p>')
-                        soap_box = gr.JSON(label="Structured Note")
-                with gr.Column(scale=2):
-                    with gr.Group(elem_classes="card"):
-                        gr.HTML('<p class="section-title">Medical Entities (SNOMED)</p>')
-                        entities_box = gr.JSON(label="Entities (Parrotlet-e)")
-
-            # ── Status ──
-            status_box = gr.Textbox(
-                label="Status",
-                interactive=False,
-                elem_classes="status-bar",
+            audio_input = gr.Audio(
+                sources=["microphone"],
+                type="numpy",
+                label="Record consultation (Hindi, English, or any Indian language)",
             )
 
-            # ── Event handlers ──
+            transcript_box = gr.Textbox(
+                label="Transcript (auto-filled, edit if needed)",
+                lines=4,
+                placeholder="Transcript will appear here after recording..."
+            )
+
+            with gr.Row():
+                transcribe_btn = gr.Button("Transcribe Audio", variant="secondary")
+                process_btn = gr.Button("Structure & Save Record", variant="primary")
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### SOAP Note")
+                    soap_box = gr.JSON(label="Structured Note")
+                with gr.Column():
+                    gr.Markdown("### Detected Medical Entities (SNOMED)")
+                    entities_box = gr.JSON(label="Entities (Parrotlet-e)")
+
+            status_box = gr.Textbox(label="Status", interactive=False)
+
             def on_transcribe(audio):
                 if audio is None:
                     return "No audio recorded. Please use the microphone."
@@ -720,44 +462,30 @@ def build_app() -> gr.Blocks:
                         transcript=transcript,
                         structured=structured,
                         entities=entities,
-                        language="mixed",
+                        language="mixed"
                     )
-                    return structured, entities, f"Saved. Record ID: {record_id}"
+                    return structured, entities, f"✓ Saved. Record ID: {record_id}"
                 except Exception as e:
                     logging.exception("process error")
                     return {}, [], f"Error: {e}"
 
+            # Only button click — no stop_recording
             transcribe_btn.click(
                 fn=on_transcribe,
                 inputs=[audio_input],
-                outputs=[transcript_box],
+                outputs=[transcript_box]
             )
             process_btn.click(
                 fn=on_process,
                 inputs=[patient_id_box, doctor_id_box, transcript_box],
-                outputs=[soap_box, entities_box, status_box],
+                outputs=[soap_box, entities_box, status_box]
             )
 
-        # ═══════════════════ Tab 2: Doctor Dashboard ═══════════════════
-        with gr.Tab("Dashboard"):
-            with gr.Group(elem_classes="card"):
-                gr.HTML('<p class="section-title">Today\'s Overview</p>')
-                refresh_btn = gr.Button(
-                    "Refresh Dashboard",
-                    variant="secondary",
-                    elem_classes="btn-secondary",
-                )
-
-            with gr.Row(equal_height=True):
-                with gr.Column(scale=1):
-                    with gr.Group(elem_classes="card"):
-                        total_box = gr.Number(label="Patients Seen Today")
-                with gr.Column(scale=1):
-                    with gr.Group(elem_classes="card"):
-                        lang_box = gr.JSON(label="Language Breakdown")
-                with gr.Column(scale=1):
-                    with gr.Group(elem_classes="card"):
-                        symptoms_box = gr.JSON(label="Top 5 Symptoms Today")
+        with gr.Tab("Doctor Dashboard"):
+            refresh_btn = gr.Button("Refresh Dashboard", variant="secondary")
+            total_box = gr.Number(label="Patients Seen Today")
+            symptoms_box = gr.JSON(label="Top 5 Symptoms Today")
+            lang_box = gr.JSON(label="Language Breakdown")
 
             def refresh_dashboard(doctor_id):
                 try:
@@ -765,30 +493,23 @@ def build_app() -> gr.Blocks:
                     return (
                         data["total_patients_today"],
                         data["top_symptoms"],
-                        data["languages"],
+                        data["languages"]
                     )
                 except Exception as e:
                     return 0, [], {"error": str(e)}
 
+            # Use State, not the textbox from Tab 1
             refresh_btn.click(
                 fn=refresh_dashboard,
                 inputs=[doctor_id_state],
-                outputs=[total_box, symptoms_box, lang_box],
+                outputs=[total_box, symptoms_box, lang_box]
             )
 
-        # ═══════════════════ Tab 3: Health Alerts ═══════════════════
         with gr.Tab("Health Alerts"):
-            with gr.Group(elem_classes="card"):
-                gr.HTML('<p class="section-title">Population-Level Insights</p>')
-                gr.HTML(
-                    '<div class="alert-info">Run Notebook 03 to generate alerts, then refresh below.</div>'
-                )
-                alerts_refresh = gr.Button(
-                    "Load Alerts",
-                    variant="secondary",
-                    elem_classes="btn-secondary",
-                )
-                alerts_display = gr.JSON(label="Current Alerts")
+            gr.Markdown("### Population-level insights from Spark analytics")
+            gr.Markdown("*(Run Notebook 03 to generate alerts, then refresh)*")
+            alerts_refresh = gr.Button("Load Alerts")
+            alerts_display = gr.JSON(label="Current Alerts")
 
             def load_alerts():
                 query = """
@@ -809,13 +530,12 @@ def build_app() -> gr.Blocks:
 
     return demo
 
-
 def main():
     logging.basicConfig(level="INFO")
     _load_secrets()
     demo = build_app()
     demo.queue()
-    demo.launch()
+    demo.launch()  # bare launch — platform injects all env vars
 
 if __name__ == "__main__":
     main()
