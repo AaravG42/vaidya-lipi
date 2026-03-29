@@ -264,7 +264,7 @@ def structure_transcript(transcript: str) -> dict:
         temperature=0.1,
     )
 
-    content = response.choices[0].message.content.strip()
+    content = response["choices"][0]["message"]["content"].strip()
 
     # Strip markdown fences if present
     if content.startswith("```"):
