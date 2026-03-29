@@ -4,17 +4,29 @@ Vaidya Lipi is an AI-powered clinical scribe that converts multilingual doctor-p
 
 ## Architecture
 
-Vaidya Lipi uses a hybrid pipeline combining multilingual ASR, clinical-specific embeddings, and large language models, all orchestrated on the Databricks Lakehouse platform.
+Vaidya Lipi uses a hybrid pipeline combining multilingual ASR, clinical-specific embeddings, and large language models on the Databricks Lakehouse.
 
-```mermaid
-graph TD
-    A[Gradio UI (Databricks Apps)] -->|Audio| B[Sarvam Saaras v3 (Speech-to-Text)]
-    B -->|Transcript| C[Databricks Serving (Llama 3.3 70B)]
-    B -->|Transcript| D[Parrotlet-e + FAISS (SNOMED-CT Mapping)]
-    C -->|Structured SOAP Note| E[Databricks SQL Warehouse]
-    D -->|Clinical Entities| E
-    E -->|Storage| F[Delta Lake (Unity Catalog)]
-    E -->|Analytics| G[Doctor Dashboard & Alerts]
+```text
+  ┌──────────────────────────┐
+  │  Doctor Interaction UI   │──▶ Audio / Free Text Input
+  │      (Gradio App)        │
+  └─────────────┬────────────┘
+                ▼
+  ┌──────────────────────────┐      ┌──────────────────────────┐
+  │  Sarvam Saaras v3 (ASR)  │──▶──▶│  Llama-3.3-70B (LLM)     │
+  │  Speech-to-Text (Indic)  │      │  SOAP Note Structuring   │
+  └─────────────┬────────────┘      └─────────────┬────────────┘
+                ▼                                 │
+  ┌──────────────────────────┐                    ▼
+  │  Parrotlet-e + FAISS     │      ┌──────────────────────────┐
+  │  SNOMED-CT Entity Map    │──▶──▶│  Databricks SQL / Delta  │
+  └──────────────────────────┘      │  Workspace.Vaidya Schema │
+                                    └─────────────┬────────────┘
+                                                  ▼
+                                    ┌──────────────────────────┐
+                                    │   Analytics & Alerts     │
+                                    │    (PySpark + Spark)     │
+                                    └──────────────────────────┘
 ```
 
 ## How to Run
