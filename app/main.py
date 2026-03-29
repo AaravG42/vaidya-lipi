@@ -353,13 +353,16 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
     """
 
     symptom_query = f"""
-        SELECT symptom, COUNT(*) as cnt FROM (
-            SELECT explode(from_json(structured_note, 'symptoms ARRAY<STRING>'))
-                   as symptom
-            FROM workspace.vaidya.patient_records
-            WHERE doctor_id = '{doctor_id}'
-            AND DATE(timestamp) = CURRENT_DATE()
-        ) GROUP BY symptom ORDER BY cnt DESC LIMIT 5
+    SELECT symptom, COUNT(*) as cnt FROM (
+        SELECT explode(
+            from_json(structured_note, 'struct<symptoms:array<string>>').symptoms
+        ) as symptom
+        FROM workspace.vaidya.patient_records
+        WHERE doctor_id = '{doctor_id}'
+        AND DATE(timestamp) = CURRENT_DATE()
+    )
+    WHERE symptom IS NOT NULL
+    GROUP BY symptom ORDER BY cnt DESC LIMIT 5
     """
 
     with _get_sql_connection() as conn:
