@@ -248,25 +248,26 @@ Transcript:
 #         }
 def structure_transcript(transcript: str) -> dict:
     from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 
     w = WorkspaceClient()
 
     messages = [
-        {"role": "system", "content": SOAP_PROMPT},
-        {"role": "user",   "content": transcript},
+        ChatMessage(role=ChatMessageRole.SYSTEM, content=SOAP_PROMPT),
+        ChatMessage(role=ChatMessageRole.USER,   content=transcript),
     ]
 
-    # Use SDK directly — no manual URL, no token handling, no model name prefix issues
     response = w.serving_endpoints.query(
-        name="databricks-meta-llama-3-3-70b-instruct",  # Free Edition default
+        name="databricks-meta-llama-3-3-70b-instruct",
         messages=messages,
         max_tokens=1024,
         temperature=0.1,
     )
-    print("Raw response:", response)
-    content = response["choices"][0]["message"]["content"].strip()
 
-    # Strip markdown fences if present
+    # Response is a QueryEndpointResponse object — use as_dict()
+    response_dict = response.as_dict()
+    content = response_dict["choices"][0]["message"]["content"].strip()
+
     if content.startswith("```"):
         content = content.split("```")[1]
         if content.startswith("json"):
@@ -281,7 +282,6 @@ def structure_transcript(transcript: str) -> dict:
             "plan": content, "soap_s": transcript,
             "soap_o": "", "soap_a": "", "soap_p": ""
         }
-
 
 def save_record(patient_id: str, doctor_id: str, transcript: str,
                 structured: dict, entities: list, language: str) -> str:
