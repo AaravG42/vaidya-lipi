@@ -509,19 +509,19 @@ def build_app() -> gr.Blocks:
             alerts_display = gr.JSON(label="Current Alerts")
 
            def load_alerts():
-            query = """
-                SELECT alert_id, generated_at, insight_text, severity
-                FROM workspace.vaidya.health_alerts
-                ORDER BY generated_at DESC LIMIT 5
-            """
-            try:
-                with _get_sql_connection() as conn:
-                    with conn.cursor() as cursor:
-                        cursor.execute(query)
-                        cols = [d[0] for d in cursor.description]
-                        return [dict(zip(cols, row)) for row in cursor.fetchall()]
-            except Exception as e:
-                return [{"error": str(e)}]
+                query = """
+                    SELECT alert_id, generated_at, insight_text, severity
+                    FROM workspace.vaidya.health_alerts
+                    ORDER BY generated_at DESC LIMIT 5
+                """
+                try:
+                    with _get_sql_connection() as conn:
+                        with conn.cursor() as cursor:
+                            cursor.execute(query)
+                            cols = [d[0] for d in cursor.description]
+                            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+                except Exception as e:
+                    return [{"error": str(e)}]
 
             alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
 
