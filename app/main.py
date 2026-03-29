@@ -761,6 +761,175 @@ def fetch_published_alerts() -> list[dict]:
             return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def fetch_records_filtered(date_str: str, patient_id: str, doctor_id: str, scope: str) -> list:
+    """Fetch records filtered by date, patient, doctor scope."""
+    conditions = []
+
+    if date_str:
+        conditions.append(f"DATE(timestamp) = '{date_str}'")
+
+    if patient_id and patient_id.strip():
+        conditions.append(f"patient_id = '{patient_id.strip()}'")
+
+    if scope == "mine":
+        conditions.append(f"doctor_id = '{doctor_id}'")
+
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+    query = f"""
+        SELECT
+            patient_id,
+            doctor_id,
+            DATE(timestamp)                                         AS visit_date,
+            CAST(timestamp AS STRING)                               AS visit_time,
+            get_json_object(structured_note, '$.diagnosis')        AS diagnosis,
+            get_json_object(structured_note, '$.symptoms')         AS symptoms_json,
+            get_json_object(structured_note, '$.medications')      AS medications_json,
+            soap_subjective,
+            soap_objective,
+            soap_assessment,
+            soap_plan,
+            language_detected,
+            record_id
+        FROM workspace.vaidya.patient_records
+        {where}
+        ORDER BY timestamp DESC
+        LIMIT 200
+    """
+    try:
+        with _get_sql_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                cols = [d[0] for d in cur.description]
+                return [dict(zip(cols, row)) for row in cur.fetchall()]
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+def render_records_html(records: list) -> str:
+    if not records:
+        return "<div style='padding:20px;color:var(--body-text-color-subdued);text-align:center'>No records found for the selected filters.</div>"
+
+    if records and "error" in records[0]:
+        return f"<div style='color:red;padding:12px'>Error: {records[0]['error']}</div>"
+
+    cards = ""
+    for r in records:
+        # Parse symptoms and medications
+        try:
+            symptoms = json.loads(r.get("symptoms_json") or "[]")
+        except Exception:
+            symptoms = []
+        try:
+            meds = json.loads(r.get("medications_json") or "[]")
+        except Exception:
+            meds = []
+
+        sym_tags = "".join(
+            f'<span style="background:var(--background-fill-secondary);border:1px solid var(--border-color-primary);'
+            f'border-radius:10px;padding:2px 9px;margin:2px;display:inline-block;font-size:12px;'
+            f'color:var(--body-text-color)">{s}</span>'
+            for s in symptoms
+        ) or "<em style='color:var(--body-text-color-subdued)'>None</em>"
+
+        med_tags = "".join(
+            f'<span style="background:var(--background-fill-secondary);border:1px solid var(--border-color-primary);'
+            f'border-radius:10px;padding:2px 9px;margin:2px;display:inline-block;font-size:12px;'
+            f'color:var(--body-text-color)">💊 {m}</span>'
+            for m in meds
+        ) or "<em style='color:var(--body-text-color-subdued)'>None</em>"
+
+        lang_map = {"en-IN":"🇬🇧 EN","hi-IN":"🇮🇳 HI","mr-IN":"🇮🇳 MR",
+                    "ta-IN":"🇮🇳 TA","te-IN":"🇮🇳 TE","kn-IN":"🇮🇳 KN","mixed":"🔀 Mix"}
+        lang_badge = lang_map.get(r.get("language_detected",""), r.get("language_detected",""))
+
+        ts = str(r.get("visit_time",""))[:16]
+        diagnosis = r.get("diagnosis") or "—"
+        soap_s = r.get("soap_subjective") or "—"
+        soap_o = r.get("soap_objective")  or "—"
+        soap_a = r.get("soap_assessment") or "—"
+        soap_p = r.get("soap_plan")       or "—"
+        record_id = str(r.get("record_id",""))[:8]
+
+        cards += f"""
+        <div style="border:1px solid var(--border-color-primary);border-radius:12px;
+                    padding:16px;margin-bottom:14px;background:var(--background-fill-secondary)">
+
+          <!-- Header row -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+            <div>
+              <span style="font-size:16px;font-weight:600;color:var(--body-text-color)">
+                👤 {r.get("patient_id","—")}
+              </span>
+              <span style="margin-left:10px;font-size:12px;color:var(--body-text-color-subdued)">
+                Dr. {r.get("doctor_id","—")}
+              </span>
+            </div>
+            <div style="text-align:right">
+              <span style="font-size:12px;color:var(--body-text-color-subdued)">{ts}</span>
+              <span style="margin-left:8px;font-size:11px;background:var(--background-fill-primary);
+                           border:1px solid var(--border-color-primary);border-radius:6px;
+                           padding:2px 6px;color:var(--body-text-color-subdued)">{lang_badge}</span>
+              <span style="margin-left:6px;font-size:10px;color:var(--body-text-color-subdued)">#{record_id}</span>
+            </div>
+          </div>
+
+          <!-- Diagnosis banner -->
+          <div style="background:var(--background-fill-primary);border-left:3px solid #4299e1;
+                      border-radius:0 6px 6px 0;padding:8px 12px;margin-bottom:12px">
+            <span style="font-size:11px;font-weight:600;color:#4299e1;letter-spacing:0.5px">DIAGNOSIS</span>
+            <div style="font-size:14px;color:var(--body-text-color);margin-top:2px">{diagnosis}</div>
+          </div>
+
+          <!-- Symptoms + Medications side by side -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);
+                          letter-spacing:0.5px;margin-bottom:6px">🏷️ SYMPTOMS</div>
+              <div>{sym_tags}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);
+                          letter-spacing:0.5px;margin-bottom:6px">💊 MEDICATIONS</div>
+              <div>{med_tags}</div>
+            </div>
+          </div>
+
+          <!-- SOAP grid -->
+          <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);
+                      letter-spacing:0.5px;margin-bottom:6px">📋 SOAP NOTE</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <tr>
+              <td style="width:22px;padding:5px 10px 5px 8px;font-weight:700;color:#4299e1;
+                         vertical-align:top;border-bottom:1px solid var(--border-color-primary)">S</td>
+              <td style="padding:5px 8px;color:var(--body-text-color);
+                         border-bottom:1px solid var(--border-color-primary)">{soap_s}</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 10px 5px 8px;font-weight:700;color:#48bb78;
+                         vertical-align:top;border-bottom:1px solid var(--border-color-primary)">O</td>
+              <td style="padding:5px 8px;color:var(--body-text-color);
+                         border-bottom:1px solid var(--border-color-primary)">{soap_o}</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 10px 5px 8px;font-weight:700;color:#ed8936;
+                         vertical-align:top;border-bottom:1px solid var(--border-color-primary)">A</td>
+              <td style="padding:5px 8px;color:var(--body-text-color);
+                         border-bottom:1px solid var(--border-color-primary)">{soap_a}</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 10px 5px 8px;font-weight:700;color:#9f7aea;
+                         vertical-align:top">P</td>
+              <td style="padding:5px 8px;color:var(--body-text-color)">{soap_p}</td>
+            </tr>
+          </table>
+
+        </div>
+        """
+
+    count_line = f'<div style="font-size:12px;color:var(--body-text-color-subdued);margin-bottom:12px">{len(records)} record(s) shown</div>'
+    return count_line + cards
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 def build_app() -> gr.Blocks:
@@ -1130,6 +1299,95 @@ def build_app() -> gr.Blocks:
                     return f"<p style='color:red'>Error: {e}</p>"
 
             alerts_refresh.click(fn=load_published_alerts, outputs=[alerts_html])
+
+        # ── Tab 5: Records Viewer ─────────────────────────────────────────────
+        with gr.Tab("🗂️ Records Viewer"):
+
+            gr.Markdown("Browse SOAP notes day-wise or patient-wise. Leave a filter blank to ignore it.")
+
+            with gr.Row():
+                filter_date = gr.Textbox(
+                    label="📅 Date (YYYY-MM-DD) — leave blank for all dates",
+                    placeholder="e.g. 2026-03-29",
+                    scale=2,
+                )
+                filter_patient = gr.Textbox(
+                    label="👤 Patient ID — leave blank for all patients",
+                    placeholder="e.g. PAT9999",
+                    scale=2,
+                )
+                filter_scope = gr.Radio(
+                    choices=[("My records only", "mine"), ("All doctors", "all")],
+                    value="mine",
+                    label="👨‍⚕️ Scope",
+                    scale=1,
+                )
+
+            with gr.Row():
+                viewer_search_btn = gr.Button("🔍 Search", variant="primary", scale=1)
+                viewer_today_btn  = gr.Button("📅 Today",  variant="secondary", scale=1)
+                viewer_all_btn    = gr.Button("👤 This Patient (all dates)", variant="secondary", scale=1)
+
+            viewer_count = gr.Markdown("")
+            viewer_html  = gr.HTML(
+                value="<div style='padding:20px;color:var(--body-text-color-subdued);text-align:center'>"
+                      "Use the filters above and click Search.</div>"
+            )
+
+            def do_search(date_str, patient_id, scope, doctor_id, progress=gr.Progress()):
+                progress(0, desc="Querying records...")
+                records = fetch_records_filtered(date_str, patient_id, doctor_id, scope)
+                progress(0.7, desc="Rendering...")
+                html = render_records_html(records)
+                progress(1.0, desc="Done")
+                return html
+
+            def do_today(scope, doctor_id, progress=gr.Progress()):
+                from datetime import date
+                today = date.today().isoformat()
+                progress(0, desc="Loading today's records...")
+                records = fetch_records_filtered(today, "", doctor_id, scope)
+                progress(0.7, desc="Rendering...")
+                html = render_records_html(records)
+                progress(1.0)
+                return today, html
+
+            def do_patient_all(patient_id, scope, doctor_id, progress=gr.Progress()):
+                if not patient_id.strip():
+                    return "", "<div style='color:orange;padding:12px'>Enter a Patient ID first.</div>"
+                progress(0, desc=f"Loading all visits for {patient_id}...")
+                records = fetch_records_filtered("", patient_id, doctor_id, scope)
+                progress(0.7, desc="Rendering...")
+                html = render_records_html(records)
+                progress(1.0)
+                return "", html
+
+            viewer_search_btn.click(
+                fn=do_search,
+                inputs=[filter_date, filter_patient, filter_scope, doctor_id_state],
+                outputs=[viewer_html],
+                show_progress="full",
+            )
+            viewer_today_btn.click(
+                fn=do_today,
+                inputs=[filter_scope, doctor_id_state],
+                outputs=[filter_date, viewer_html],
+                show_progress="full",
+            )
+            viewer_all_btn.click(
+                fn=do_patient_all,
+                inputs=[filter_patient, filter_scope, doctor_id_state],
+                outputs=[filter_date, viewer_html],
+                show_progress="full",
+            )
+
+            # Auto-search when patient ID is typed (with a small debounce via submit)
+            filter_patient.submit(
+                fn=do_search,
+                inputs=[filter_date, filter_patient, filter_scope, doctor_id_state],
+                outputs=[viewer_html],
+                show_progress="full",
+            )
 
     return demo
 
