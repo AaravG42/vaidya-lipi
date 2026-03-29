@@ -700,7 +700,7 @@ def build_app() -> gr.Blocks:
                 except Exception as e:
                     return f"Transcription error: {e}"
 
-            def on_process(transcript):
+            def on_process(transcript, progress=gr.Progress()):
                 if not transcript.strip():
                     return (
                         gr.update(visible=False),
