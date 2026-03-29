@@ -886,20 +886,35 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
         **PLOTLY_LAYOUT,
     )
 
-    # Fig 2 — Cluster symptom profiles
+    # Fig 2 — Cluster symptom profiles (vertical grid, 2 columns)
+    n_cols = 2
+    n_rows = (best_k + 1) // 2  # ceil division
+
+    subplot_titles = []
+    for cid in range(best_k):
+        prof = cluster_profiles[cid]
+        dx   = ", ".join(prof["top_diagnoses"][:2]) or "—"
+        subplot_titles.append(f"Cluster {cid} — {prof['size']} patients — {dx}")
+    # pad to even number
+    if len(subplot_titles) % 2 != 0:
+        subplot_titles.append("")
+
     fig2 = make_subplots(
-        rows=1, cols=best_k,
-        subplot_titles=[
-            f"Cluster {cid} — {cluster_profiles[cid]['size']} patients<br>"
-            f"<sup>{', '.join(cluster_profiles[cid]['top_diagnoses'][:2]) or '—'}</sup>"
-            for cid in range(best_k)
-        ]
+        rows=n_rows, cols=n_cols,
+        subplot_titles=subplot_titles,
+        vertical_spacing=0.12,
+        horizontal_spacing=0.08,
     )
+
     for cid in range(best_k):
         prof   = cluster_profiles[cid]
         syms   = [s for s,_ in prof["top_symptoms"]][::-1]
         counts = [c for _,c in prof["top_symptoms"]][::-1]
         color  = GREEN_SCALE[2 + cid % 4]
+
+        row = cid // n_cols + 1
+        col = cid %  n_cols + 1
+
         fig2.add_trace(
             go.Bar(
                 x=counts, y=syms,
@@ -909,17 +924,19 @@ def run_ml_analysis(records: list[dict], n_clusters: int = 4):
                 hovertemplate="<b>%{y}</b><br>Frequency: %{x}<extra></extra>",
                 showlegend=False,
             ),
-            row=1, col=cid + 1
+            row=row, col=col
         )
+
     fig2.update_layout(
         title=dict(text="Symptom Profiles per Cluster",
                    font=dict(size=14, color="#9ae6b4")),
-        height=420,
+        height=300 * n_rows,   # grows with number of clusters
         **PLOTLY_LAYOUT,
     )
-    for i in range(1, best_k + 1):
-        fig2.update_xaxes(gridcolor="#2d3748", row=1, col=i)
-        fig2.update_yaxes(gridcolor="#2d3748", showgrid=False, row=1, col=i)
+    for r in range(1, n_rows + 1):
+        for c in range(1, n_cols + 1):
+            fig2.update_xaxes(gridcolor="#2d3748", row=r, col=c)
+            fig2.update_yaxes(gridcolor="#2d3748", showgrid=False, row=r, col=c)
 
     # Fig 3 — PCA scatter
     pca  = PCA(n_components=2, random_state=42)
