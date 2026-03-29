@@ -247,30 +247,19 @@ Transcript:
 #             "soap_o": "", "soap_a": "", "soap_p": ""
 #         }
 def structure_transcript(transcript: str) -> dict:
-    from openai import OpenAI
     from databricks.sdk import WorkspaceClient
 
-    base_url = os.environ.get("LLM_OPENAI_BASE_URL", "")
-    model = os.environ.get("LLM_MODEL", "databricks-llama-4-maverick")
-
-    if not base_url:
-        raise ValueError("LLM_OPENAI_BASE_URL not set in app.yaml")
-
-    # Get a fresh token the same way Nyaya Dhwani does it
     w = WorkspaceClient()
-    token = w.config.authenticate().get("Authorization", "").replace("Bearer ", "")
 
-    client = OpenAI(
-        api_key=token,
-        base_url=base_url,
-    )
+    messages = [
+        {"role": "system", "content": SOAP_PROMPT},
+        {"role": "user",   "content": transcript},
+    ]
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": SOAP_PROMPT},
-            {"role": "user",   "content": transcript},
-        ],
+    # Use SDK directly — no manual URL, no token handling, no model name prefix issues
+    response = w.serving_endpoints.query(
+        name="databricks-meta-llama-3-3-70b-instruct",  # Free Edition default
+        messages=messages,
         max_tokens=1024,
         temperature=0.1,
     )
