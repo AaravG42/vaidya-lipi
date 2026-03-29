@@ -382,586 +382,690 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
         "languages": languages,
     }
 
-_CSS = """
-/* ── Dark Mode Tokens ─────────────────────────────────────── */
-:root {
-  --vl-bg:          #0B1120;
-  --vl-surface:     #131F35;
-  --vl-surface-hi:  #1A2A45;
-  --vl-border:      #1E3050;
-  --vl-border-hi:   #2A4268;
-  --vl-teal:        #2DD4BF;
-  --vl-teal-btn:    #0D9488;
-  --vl-teal-btn-dk: #0F766E;
-  --vl-teal-pale:   rgba(45,212,191,0.07);
-  --vl-teal-ring:   rgba(45,212,191,0.2);
-  --vl-blue:        #38BDF8;
-  --vl-text:        #E2E8F0;
-  --vl-text-muted:  #94A3B8;
-  --vl-text-dim:    #475569;
-  --vl-green:       #34D399;
-  --vl-red:         #F87171;
-  --vl-amber:       #FBBF24;
-  --vl-radius:      12px;
-  --vl-shadow:      0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
-}
+# ── HTML rendering helpers ────────────────────────────────────────────────────
 
-/* ── Global Dark Base ─────────────────────────────────────── */
-body, html {
-  background: var(--vl-bg) !important;
-  color-scheme: dark;
-}
-.gradio-container {
-  background: var(--vl-bg) !important;
-  max-width: 1080px !important;
-  margin: 0 auto !important;
-  padding: 0 !important;
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
-  color: var(--vl-text) !important;
-}
-footer { display: none !important; }
-.contain { padding: 0 !important; background: var(--vl-bg) !important; }
+def render_soap_html(structured: dict, entities: list) -> str:
+    """Render structured note as a styled HTML card."""
+    symptoms   = structured.get("symptoms", [])
+    meds       = structured.get("medications", [])
+    diagnosis  = structured.get("diagnosis", "—")
+    plan       = structured.get("plan", "—")
+    soap_s     = structured.get("soap_s", "—")
+    soap_o     = structured.get("soap_o", "—")
+    soap_a     = structured.get("soap_a", "—")
+    soap_p     = structured.get("soap_p", "—")
 
-/* Gradio internal wrappers — force dark */
-.block, .form, .gap, .padded,
-.wrap:not(.vl-header *),
-div[class*="gradio-"] {
-  background: transparent !important;
-}
-.tabitem { background: transparent !important; }
+    sym_html = "".join(f'<span style="background:#e8f4fd;border:1px solid #90cdf4;border-radius:12px;padding:3px 10px;margin:3px;display:inline-block;font-size:13px">{s}</span>' for s in symptoms) or "<em>None detected</em>"
+    med_html = "".join(f'<span style="background:#f0fff4;border:1px solid #9ae6b4;border-radius:12px;padding:3px 10px;margin:3px;display:inline-block;font-size:13px">💊 {m}</span>' for m in meds) or "<em>None</em>"
+    ent_html = "".join(f'<span style="background:#faf5ff;border:1px solid #d6bcfa;border-radius:12px;padding:3px 10px;margin:3px;display:inline-block;font-size:12px">🔬 {e["term"]} <code style="font-size:10px;color:#805ad5">{e["concept_id"]}</code></span>' for e in entities) or "<em>No entities mapped</em>"
 
-/* ── App Header ───────────────────────────────────────────── */
-.vl-header {
-  background: linear-gradient(135deg, #0B4D45 0%, #0B3A5C 100%);
-  border-radius: 0 0 20px 20px;
-  padding: 26px 32px 30px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #1A4060;
-}
-.vl-header-inner {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-.vl-logo {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 4px;
-}
-.vl-logo-icon {
-  width: 46px; height: 46px;
-  background: rgba(45,212,191,0.15);
-  border: 1px solid rgba(45,212,191,0.35);
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px;
-  flex-shrink: 0;
-}
-.vl-logo h1 {
-  font-size: 1.75rem !important;
-  font-weight: 800 !important;
-  color: #E2E8F0 !important;
-  margin: 0 !important;
-  letter-spacing: -0.4px !important;
-  line-height: 1.1 !important;
-}
-.vl-deva {
-  font-size: 0.9rem;
-  color: rgba(226,232,240,0.6);
-  margin: 0;
-  font-weight: 400;
-}
-.vl-tagline {
-  font-size: 0.82rem;
-  color: rgba(226,232,240,0.5);
-  margin: 6px 0 0 0;
-}
-.vl-badges {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.vl-badge {
-  background: rgba(45,212,191,0.12);
-  border: 1px solid rgba(45,212,191,0.3);
-  border-radius: 20px;
-  padding: 3px 11px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--vl-teal);
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-}
+    return f"""
+    <div style="font-family:sans-serif;max-width:100%;padding:4px">
 
-/* ── Cards ────────────────────────────────────────────────── */
-.vl-card {
-  background: var(--vl-surface) !important;
-  border-radius: var(--vl-radius) !important;
-  box-shadow: var(--vl-shadow) !important;
-  border: 1px solid var(--vl-border) !important;
-  padding: 20px 22px !important;
-  margin-bottom: 14px !important;
-}
-.vl-card > .wrap,
-.vl-card > div > .wrap { border: none !important; background: transparent !important; }
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:600;color:#2d3748;margin-bottom:8px;font-size:15px">🏷️ Symptoms</div>
+        <div>{sym_html}</div>
+      </div>
 
-/* ── Section Labels ───────────────────────────────────────── */
-.vl-section-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.1px;
-  color: var(--vl-text-dim);
-  margin: 0 0 14px 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--vl-border);
-}
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:600;color:#2d3748;margin-bottom:8px;font-size:15px">💊 Medications</div>
+        <div>{med_html}</div>
+      </div>
 
-/* ── Workflow Steps ───────────────────────────────────────── */
-.vl-steps {
-  display: flex;
-  align-items: center;
-  padding: 12px 4px 18px;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.vl-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: var(--vl-text-muted);
-  font-weight: 500;
-  white-space: nowrap;
-}
-.vl-step-num {
-  width: 26px; height: 26px;
-  border-radius: 50%;
-  background: var(--vl-surface);
-  color: var(--vl-text-muted);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.72rem; font-weight: 700;
-  flex-shrink: 0;
-  border: 1.5px solid var(--vl-border-hi);
-}
-.vl-step-line {
-  width: 36px; height: 2px;
-  background: var(--vl-border);
-  margin: 0 2px;
-  flex-shrink: 0;
-}
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:600;color:#2d3748;margin-bottom:4px;font-size:15px">🩺 Diagnosis</div>
+        <div style="color:#4a5568;padding:4px 0">{diagnosis}</div>
+      </div>
 
-/* ── Tabs ─────────────────────────────────────────────────── */
-.tabs > .tab-nav { border-bottom: 2px solid var(--vl-border) !important; background: transparent !important; }
-.tabs > .tab-nav > button {
-  font-weight: 600 !important;
-  font-size: 0.88rem !important;
-  color: var(--vl-text-muted) !important;
-  padding: 10px 18px !important;
-  border-radius: 0 !important;
-  border-bottom: 2px solid transparent !important;
-  margin-bottom: -2px !important;
-  background: transparent !important;
-}
-.tabs > .tab-nav > button.selected {
-  color: var(--vl-teal) !important;
-  border-bottom-color: var(--vl-teal) !important;
-  background: transparent !important;
-}
-.tabs > .tab-nav > button:hover:not(.selected) {
-  color: var(--vl-text) !important;
-  background: rgba(255,255,255,0.04) !important;
-}
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:600;color:#2d3748;margin-bottom:8px;font-size:15px">📋 SOAP Note</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td style="padding:6px 10px;background:#f7fafc;border-radius:4px;width:28px;font-weight:600;color:#4299e1">S</td><td style="padding:6px 10px;color:#4a5568">{soap_s}</td></tr>
+          <tr><td style="padding:6px 10px;background:#f7fafc;border-radius:4px;font-weight:600;color:#48bb78">O</td><td style="padding:6px 10px;color:#4a5568">{soap_o}</td></tr>
+          <tr><td style="padding:6px 10px;background:#f7fafc;border-radius:4px;font-weight:600;color:#ed8936">A</td><td style="padding:6px 10px;color:#4a5568">{soap_a}</td></tr>
+          <tr><td style="padding:6px 10px;background:#f7fafc;border-radius:4px;font-weight:600;color:#9f7aea">P</td><td style="padding:6px 10px;color:#4a5568">{soap_p}</td></tr>
+        </table>
+      </div>
 
-/* ── Form Labels ──────────────────────────────────────────── */
-label > span,
-.vl-card label > span:first-child {
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
-  color: var(--vl-text-muted) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.6px !important;
-}
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px">
+        <div style="font-weight:600;color:#2d3748;margin-bottom:8px;font-size:15px">🔬 SNOMED Entities</div>
+        <div>{ent_html}</div>
+      </div>
+    </div>
+    """
 
-/* ── Form Inputs ──────────────────────────────────────────── */
-input[type="text"],
-input[type="number"],
-textarea {
-  border-radius: 8px !important;
-  border-color: var(--vl-border-hi) !important;
-  background: var(--vl-bg) !important;
-  color: var(--vl-text) !important;
-  font-size: 0.9rem !important;
-  transition: border-color 0.15s, box-shadow 0.15s !important;
-}
-input[type="text"]:focus,
-input[type="number"]:focus,
-textarea:focus {
-  border-color: var(--vl-teal) !important;
-  box-shadow: 0 0 0 3px var(--vl-teal-ring) !important;
-  outline: none !important;
-}
-input::placeholder, textarea::placeholder {
-  color: var(--vl-text-dim) !important;
-}
 
-/* ── Buttons ──────────────────────────────────────────────── */
-button.primary {
-  background: var(--vl-teal-btn) !important;
-  border-color: var(--vl-teal-btn) !important;
-  color: white !important;
-  border-radius: 8px !important;
-  font-weight: 600 !important;
-  font-size: 0.88rem !important;
-  padding: 9px 20px !important;
-  transition: background 0.15s, transform 0.1s, box-shadow 0.15s !important;
-}
-button.primary:hover {
-  background: var(--vl-teal-btn-dk) !important;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 4px 16px rgba(13,148,136,0.35) !important;
-}
-button.secondary {
-  border-radius: 8px !important;
-  font-weight: 600 !important;
-  font-size: 0.88rem !important;
-  padding: 9px 20px !important;
-  border-color: var(--vl-border-hi) !important;
-  color: var(--vl-text-muted) !important;
-  background: var(--vl-surface-hi) !important;
-  transition: background 0.15s, border-color 0.15s, color 0.15s !important;
-}
-button.secondary:hover {
-  background: var(--vl-border) !important;
-  border-color: var(--vl-text-dim) !important;
-  color: var(--vl-text) !important;
-}
+# ── Chart helpers ─────────────────────────────────────────────────────────────
 
-/* ── Audio Block ──────────────────────────────────────────── */
-.vl-audio .wrap,
-.vl-audio .audio-container {
-  border-radius: 10px !important;
-  border: 2px dashed rgba(45,212,191,0.3) !important;
-  background: var(--vl-teal-pale) !important;
-}
+def make_symptom_chart(top_symptoms: list, title: str):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
-/* ── Status ───────────────────────────────────────────────── */
-.vl-status label > span { display: none !important; }
-.vl-status textarea {
-  font-size: 0.84rem !important;
-  border-radius: 8px !important;
-  background: var(--vl-surface-hi) !important;
-  color: var(--vl-text-muted) !important;
-  font-family: 'SF Mono', 'Fira Code', monospace !important;
-  border-color: var(--vl-border) !important;
-}
+    if not top_symptoms:
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.text(0.5, 0.5, "No data yet", ha="center", va="center", fontsize=13, color="#888")
+        ax.axis("off")
+        return fig
 
-/* ── JSON viewers ─────────────────────────────────────────── */
-.json-holder, pre {
-  background: var(--vl-bg) !important;
-  color: var(--vl-text) !important;
-  border-color: var(--vl-border) !important;
-  border-radius: 8px !important;
-}
+    labels = [s[0] for s in top_symptoms][::-1]
+    values = [s[1] for s in top_symptoms][::-1]
+    colors = ["#4299e1","#48bb78","#ed8936","#9f7aea","#fc8181"][:len(labels)]
 
-/* ── Dashboard stat ───────────────────────────────────────── */
-.vl-stat input[type="number"] {
-  font-size: 2.8rem !important;
-  font-weight: 800 !important;
-  color: var(--vl-teal) !important;
-  text-align: center !important;
-  border: none !important;
-  background: var(--vl-teal-pale) !important;
-  border-radius: 10px !important;
-  padding: 16px !important;
-}
+    fig, ax = plt.subplots(figsize=(6, max(3, len(labels)*0.6)))
+    bars = ax.barh(labels, values, color=colors, edgecolor="none", height=0.5)
+    ax.bar_label(bars, padding=4, fontsize=11)
+    ax.set_xlabel("Patients", fontsize=11)
+    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.spines[["top","right","left"]].set_visible(False)
+    ax.tick_params(left=False)
+    ax.set_xlim(0, max(values) * 1.25)
+    fig.tight_layout()
+    return fig
 
-/* ── Misc Gradio overrides ────────────────────────────────── */
-.svelte-1gfkn6j, .panel { background: transparent !important; }
-p, span, li { color: var(--vl-text) !important; }
 
-/* ── Responsive ───────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .vl-header { padding: 18px 20px 22px; }
-  .vl-logo h1 { font-size: 1.4rem !important; }
-  .vl-steps { gap: 8px; }
-  .vl-step-line { width: 18px; }
-}
-"""
+def make_language_chart(lang_dict: dict, title: str):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
+    if not lang_dict:
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.text(0.5, 0.5, "No data yet", ha="center", va="center")
+        ax.axis("off")
+        return fig
+
+    label_map = {"en-IN":"English","hi-IN":"Hindi","mr-IN":"Marathi",
+                 "ta-IN":"Tamil","te-IN":"Telugu","kn-IN":"Kannada","mixed":"Mixed"}
+    labels = [label_map.get(k, k) for k in lang_dict.keys()]
+    values = list(lang_dict.values())
+    colors = ["#4299e1","#48bb78","#ed8936","#9f7aea","#fc8181","#76e4f7","#f6ad55"]
+
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.pie(values, labels=labels, autopct="%1.0f%%",
+           colors=colors[:len(values)], startangle=90,
+           wedgeprops={"edgecolor":"white","linewidth":2})
+    ax.set_title(title, fontsize=12, fontweight="bold")
+    fig.tight_layout()
+    return fig
+
+
+def make_daily_volume_chart(rows: list, title: str):
+    """rows: list of (date_str, count)"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from collections import OrderedDict
+
+    if not rows:
+        fig, ax = plt.subplots(figsize=(6, 3))
+        ax.text(0.5, 0.5, "No data yet", ha="center", va="center")
+        ax.axis("off")
+        return fig
+
+    data = OrderedDict(sorted(rows))
+    dates = list(data.keys())
+    counts = list(data.values())
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.plot(dates, counts, marker="o", color="#4299e1", linewidth=2, markersize=6)
+    ax.fill_between(dates, counts, alpha=0.15, color="#4299e1")
+    ax.set_title(title, fontsize=12, fontweight="bold")
+    ax.set_ylabel("Patients")
+    ax.spines[["top","right"]].set_visible(False)
+    plt.xticks(rotation=30, ha="right", fontsize=9)
+    fig.tight_layout()
+    return fig
+
+
+# ── Dashboard data fetchers ───────────────────────────────────────────────────
+
+def fetch_dashboard_data(doctor_id: str, scope: str = "personal") -> dict:
+    """scope = 'personal' (one doctor) or 'regional' (all doctors)."""
+    where = f"doctor_id = '{doctor_id}'" if scope == "personal" else "1=1"
+
+    queries = {
+        "total_today": f"""
+            SELECT COUNT(*) FROM workspace.vaidya.patient_records
+            WHERE {where} AND DATE(timestamp) = CURRENT_DATE()""",
+
+        "total_week": f"""
+            SELECT COUNT(*) FROM workspace.vaidya.patient_records
+            WHERE {where} AND timestamp >= current_timestamp() - interval 7 days""",
+
+        "top_symptoms": f"""
+            SELECT symptom, COUNT(*) as cnt FROM (
+                SELECT explode(from_json(structured_note,
+                    'struct<symptoms:array<string>>').symptoms) as symptom
+                FROM workspace.vaidya.patient_records
+                WHERE {where} AND timestamp >= current_timestamp() - interval 7 days
+            ) WHERE symptom IS NOT NULL
+            GROUP BY symptom ORDER BY cnt DESC LIMIT 8""",
+
+        "languages": f"""
+            SELECT language_detected, COUNT(*) as cnt
+            FROM workspace.vaidya.patient_records
+            WHERE {where} AND timestamp >= current_timestamp() - interval 7 days
+            GROUP BY language_detected""",
+
+        "daily_volume": f"""
+            SELECT DATE(timestamp) as day, COUNT(*) as cnt
+            FROM workspace.vaidya.patient_records
+            WHERE {where} AND timestamp >= current_timestamp() - interval 7 days
+            GROUP BY DATE(timestamp) ORDER BY day""",
+
+        "top_diagnoses": f"""
+            SELECT
+                get_json_object(structured_note,'$.diagnosis') as diagnosis,
+                COUNT(*) as cnt
+            FROM workspace.vaidya.patient_records
+            WHERE {where} AND timestamp >= current_timestamp() - interval 7 days
+            GROUP BY diagnosis ORDER BY cnt DESC LIMIT 5""",
+    }
+
+    if scope == "regional":
+        queries["doctor_volume"] = f"""
+            SELECT doctor_id, COUNT(*) as cnt
+            FROM workspace.vaidya.patient_records
+            WHERE timestamp >= current_timestamp() - interval 7 days
+            GROUP BY doctor_id ORDER BY cnt DESC"""
+
+    results = {}
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cur:
+            for key, q in queries.items():
+                cur.execute(q)
+                results[key] = cur.fetchall()
+
+    return results
+
+
+def fetch_candidate_alerts() -> list[dict]:
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT alert_id, insight_text, severity, generated_at
+                FROM workspace.vaidya.health_alerts
+                ORDER BY generated_at DESC LIMIT 10
+            """)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def publish_alerts(selected_texts: list[str], doctor_id: str):
+    if not selected_texts:
+        return
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cur:
+            for text in selected_texts:
+                alert_id = str(uuid.uuid4())
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                def esc(s): return s.replace("'","''")
+                cur.execute(f"""
+                    INSERT INTO workspace.vaidya.health_alerts_published
+                    (alert_id, published_at, insight_text, severity, published_by)
+                    VALUES ('{alert_id}','{now}','{esc(text)}','INFO','{doctor_id}')
+                """)
+
+
+def fetch_published_alerts() -> list[dict]:
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT insight_text, severity, published_at, published_by
+                FROM workspace.vaidya.health_alerts_published
+                ORDER BY published_at DESC LIMIT 10
+            """)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+# ── Main app ──────────────────────────────────────────────────────────────────
 
 def build_app() -> gr.Blocks:
+
+    CSS = """
+    .section-header {font-size:15px;font-weight:600;color:#2d3748;margin:8px 0 4px}
+    .stat-card {background:#f7fafc;border-radius:8px;padding:12px 16px;text-align:center}
+    .stat-num {font-size:28px;font-weight:700;color:#2b6cb0}
+    .stat-label {font-size:12px;color:#718096;margin-top:2px}
+    footer {visibility:hidden}
+    """
+
     with gr.Blocks(
-        css=_CSS,
-        theme=gr.themes.Base(
-            primary_hue=gr.themes.colors.teal,
-            secondary_hue=gr.themes.colors.blue,
-            neutral_hue=gr.themes.colors.slate,
-        ).set(
-            body_background_fill="#0B1120",
-            body_background_fill_dark="#0B1120",
-            block_background_fill="#131F35",
-            block_background_fill_dark="#131F35",
-            block_border_color="#1E3050",
-            block_border_color_dark="#1E3050",
-            input_background_fill="#0B1120",
-            input_background_fill_dark="#0B1120",
-            input_border_color="#2A4268",
-            input_border_color_dark="#2A4268",
-            body_text_color="#E2E8F0",
-            body_text_color_dark="#E2E8F0",
-            body_text_color_subdued="#94A3B8",
-            body_text_color_subdued_dark="#94A3B8",
-            button_primary_background_fill="#0D9488",
-            button_primary_background_fill_dark="#0D9488",
-            button_primary_text_color="white",
-            button_primary_text_color_dark="white",
-            button_secondary_background_fill="#1A2A45",
-            button_secondary_background_fill_dark="#1A2A45",
-            button_secondary_border_color="#2A4268",
-            button_secondary_border_color_dark="#2A4268",
-            button_secondary_text_color="#94A3B8",
-            button_secondary_text_color_dark="#94A3B8",
-            border_color_primary="#1E3050",
-            border_color_primary_dark="#1E3050",
-            background_fill_primary="#0B1120",
-            background_fill_primary_dark="#0B1120",
-            background_fill_secondary="#131F35",
-            background_fill_secondary_dark="#131F35",
-            color_accent="#2DD4BF",
-            color_accent_soft="rgba(45,212,191,0.12)",
-            color_accent_soft_dark="rgba(45,212,191,0.12)",
-            shadow_drop="0 2px 8px rgba(0,0,0,0.5)",
-            shadow_drop_lg="0 4px 16px rgba(0,0,0,0.6)",
-        ),
-        title="Vaidya Lipi — Medical Scribe",
+        theme=gr.themes.Soft(primary_hue="blue", secondary_hue="teal"),
+        css=CSS,
+        title="Vaidya Lipi — Medical Scribe"
     ) as demo:
 
-        gr.HTML("""
-        <div class="vl-header">
-          <div class="vl-header-inner">
-            <div>
-              <div class="vl-logo">
-                <div class="vl-logo-icon">⚕</div>
-                <div>
-                  <h1>Vaidya Lipi</h1>
-                  <p class="vl-deva">वैद्य लिपि</p>
-                </div>
-              </div>
-              <p class="vl-tagline">AI Medical Scribe — multilingual, ABDM-compatible</p>
-            </div>
-            <div class="vl-badges">
-              <span class="vl-badge">ABDM</span>
-              <span class="vl-badge">SNOMED CT</span>
-              <span class="vl-badge">Multilingual</span>
-            </div>
-          </div>
-        </div>
-        """)
+        DOCTOR_ID = "DR001"   # in production this comes from login
+
+        gr.Markdown(
+            "# Vaidya Lipi · वैद्य लिपि\n"
+            "*AI Medical Scribe · ABDM-compatible · "
+            f"Logged in as **{DOCTOR_ID}** (Head of Department)*"
+        )
+
+        doctor_id_state = gr.State(DOCTOR_ID)
+        # Store structured result between Process and Save steps
+        structured_state = gr.State({})
+        entities_state   = gr.State([])
+
+        # ── Tab 1: Record Consultation ────────────────────────────────────────
+        with gr.Tab("📝 Record Consultation"):
+
+            with gr.Row():
+                patient_id_box = gr.Textbox(
+                    label="Patient ID (ABHA ID or local ID)",
+                    placeholder="e.g. PAT1234",
+                    scale=3
+                )
+                doctor_id_box = gr.Textbox(
+                    label="Doctor ID",
+                    value=DOCTOR_ID,
+                    scale=1
+                )
+
+            doctor_id_box.change(lambda x: x, inputs=[doctor_id_box], outputs=[doctor_id_state])
+
+            audio_input = gr.Audio(
+                sources=["microphone"],
+                type="numpy",
+                label="🎙️ Record consultation (Hindi, English, or any Indian language)",
+            )
+
+            transcript_box = gr.Textbox(
+                label="Transcript — auto-filled after recording, edit freely before processing",
+                lines=4,
+                placeholder="Transcript appears here. You can also type directly."
+            )
+
+            with gr.Row():
+                transcribe_btn = gr.Button("🎙️ Transcribe Audio", variant="secondary", scale=1)
+                process_btn    = gr.Button("⚙️  Analyse Transcript", variant="secondary", scale=1)
+                save_btn       = gr.Button("💾  Save Record", variant="primary", scale=1, interactive=False)
+
+            # Results area — hidden until Process is clicked
+            results_html = gr.HTML(visible=False)
+            save_status  = gr.Textbox(label="Status", interactive=False, visible=False)
+
+            # ── Handlers ──────────────────────────────────────────────────────
+            def on_transcribe(audio):
+                if audio is None:
+                    return "No audio recorded."
+                try:
+                    transcript, lang = transcribe_audio(audio)
+                    return f"[{lang}] {transcript}"
+                except Exception as e:
+                    return f"Transcription error: {e}"
+
+            def on_process(transcript):
+                if not transcript.strip():
+                    return (
+                        gr.update(visible=False),
+                        {},
+                        [],
+                        gr.update(interactive=False),
+                        gr.update(visible=False),
+                    )
+                try:
+                    structured = structure_transcript(transcript)
+                    entities   = extract_medical_entities(transcript)
+                    html       = render_soap_html(structured, entities)
+                    return (
+                        gr.update(value=html, visible=True),
+                        structured,
+                        entities,
+                        gr.update(interactive=True),   # enable Save button
+                        gr.update(visible=False),
+                    )
+                except Exception as e:
+                    logging.exception("process error")
+                    return (
+                        gr.update(value=f"<p style='color:red'>Error: {e}</p>", visible=True),
+                        {},
+                        [],
+                        gr.update(interactive=False),
+                        gr.update(visible=False),
+                    )
+
+            def on_save(patient_id, doctor_id, transcript, structured, entities):
+                if not structured:
+                    return gr.update(value="Nothing to save — process first.", visible=True)
+                try:
+                    record_id = save_record(
+                        patient_id=patient_id or "UNKNOWN",
+                        doctor_id=doctor_id or DOCTOR_ID,
+                        transcript=transcript,
+                        structured=structured,
+                        entities=entities,
+                        language="mixed"
+                    )
+                    return gr.update(
+                        value=f"✅ Saved successfully. Record ID: `{record_id}`",
+                        visible=True
+                    )
+                except Exception as e:
+                    logging.exception("save error")
+                    return gr.update(value=f"❌ Save failed: {e}", visible=True)
+
+            transcribe_btn.click(
+                fn=on_transcribe,
+                inputs=[audio_input],
+                outputs=[transcript_box]
+            )
+            process_btn.click(
+                fn=on_process,
+                inputs=[transcript_box],
+                outputs=[results_html, structured_state, entities_state, save_btn, save_status]
+            )
+            save_btn.click(
+                fn=on_save,
+                inputs=[patient_id_box, doctor_id_box, transcript_box,
+                        structured_state, entities_state],
+                outputs=[save_status]
+            )
+
+        # ── Tab 2: My Dashboard ───────────────────────────────────────────────
+        with gr.Tab("📊 My Dashboard"):
+
+            with gr.Row():
+                my_today  = gr.HTML('<div class="stat-card"><div class="stat-num">—</div><div class="stat-label">Patients Today</div></div>')
+                my_week   = gr.HTML('<div class="stat-card"><div class="stat-num">—</div><div class="stat-label">Patients This Week</div></div>')
+
+            my_refresh = gr.Button("🔄 Refresh", variant="secondary")
+
+            with gr.Row():
+                my_symptom_chart = gr.Plot(label="Top Symptoms (7 days)")
+                my_lang_chart    = gr.Plot(label="Language Mix (7 days)")
+
+            my_volume_chart   = gr.Plot(label="Daily Patient Volume (7 days)")
+
+            with gr.Row():
+                my_diag_chart = gr.Plot(label="Top Diagnoses (7 days)")
+
+            def refresh_my(doctor_id):
+                try:
+                    d = fetch_dashboard_data(doctor_id, scope="personal")
+                    total_today = d["total_today"][0][0] if d["total_today"] else 0
+                    total_week  = d["total_week"][0][0]  if d["total_week"]  else 0
+
+                    today_html = f'<div class="stat-card"><div class="stat-num">{total_today}</div><div class="stat-label">Patients Today</div></div>'
+                    week_html  = f'<div class="stat-card"><div class="stat-num">{total_week}</div><div class="stat-label">Patients This Week</div></div>'
+
+                    sym_fig  = make_symptom_chart(d["top_symptoms"], "My Top Symptoms")
+                    lang_fig = make_language_chart({r[0]:r[1] for r in d["languages"]}, "Language Mix")
+                    vol_fig  = make_daily_volume_chart([(str(r[0]),r[1]) for r in d["daily_volume"]], "Daily Volume")
+                    diag_fig = make_symptom_chart(d["top_diagnoses"], "My Top Diagnoses")
+
+                    return today_html, week_html, sym_fig, lang_fig, vol_fig, diag_fig
+                except Exception as e:
+                    err = f'<div style="color:red">Error: {e}</div>'
+                    empty = make_symptom_chart([], "")
+                    return err, err, empty, empty, empty, empty
+
+            my_refresh.click(
+                fn=refresh_my,
+                inputs=[doctor_id_state],
+                outputs=[my_today, my_week, my_symptom_chart, my_lang_chart,
+                         my_volume_chart, my_diag_chart]
+            )
+
+        # ── Tab 3: Regional Dashboard ─────────────────────────────────────────
+        with gr.Tab("🏥 Regional Dashboard"):
+
+            with gr.Row():
+                reg_today = gr.HTML('<div class="stat-card"><div class="stat-num">—</div><div class="stat-label">Total Patients Today</div></div>')
+                reg_week  = gr.HTML('<div class="stat-card"><div class="stat-num">—</div><div class="stat-label">Total Patients This Week</div></div>')
+
+            reg_refresh = gr.Button("🔄 Refresh", variant="secondary")
+
+            with gr.Row():
+                reg_symptom_chart = gr.Plot(label="Hospital-wide Top Symptoms")
+                reg_lang_chart    = gr.Plot(label="Language Mix Across Hospital")
+
+            with gr.Row():
+                reg_volume_chart = gr.Plot(label="Hospital Daily Volume")
+                reg_doctor_chart = gr.Plot(label="Patients per Doctor")
+
+            gr.Markdown("---\n### 🚨 Generate & Send Health Alerts")
+            gr.Markdown("*Select candidate alerts from the AI analysis below to broadcast to all doctors.*")
+
+            gen_alerts_btn  = gr.Button("⚙️ Load Candidate Alerts", variant="secondary")
+            alert_choices   = gr.CheckboxGroup(choices=[], label="Select alerts to publish")
+            publish_btn     = gr.Button("📢 Publish Selected Alerts", variant="primary")
+            publish_status  = gr.Textbox(label="", interactive=False)
+
+            def refresh_regional(doctor_id):
+                try:
+                    d = fetch_dashboard_data(doctor_id, scope="regional")
+                    total_today = d["total_today"][0][0] if d["total_today"] else 0
+                    total_week  = d["total_week"][0][0]  if d["total_week"]  else 0
+
+                    today_html = f'<div class="stat-card"><div class="stat-num">{total_today}</div><div class="stat-label">Total Patients Today</div></div>'
+                    week_html  = f'<div class="stat-card"><div class="stat-num">{total_week}</div><div class="stat-label">Total Patients This Week</div></div>'
+
+                    sym_fig  = make_symptom_chart(d["top_symptoms"], "Hospital-wide Top Symptoms")
+                    lang_fig = make_language_chart({r[0]:r[1] for r in d["languages"]}, "Language Mix")
+                    vol_fig  = make_daily_volume_chart([(str(r[0]),r[1]) for r in d["daily_volume"]], "Daily Volume")
+                    doc_fig  = make_symptom_chart(d.get("doctor_volume",[]), "Patients per Doctor")
+
+                    return today_html, week_html, sym_fig, lang_fig, vol_fig, doc_fig
+                except Exception as e:
+                    err = f'<div style="color:red">Error: {e}</div>'
+                    empty = make_symptom_chart([], "")
+                    return err, err, empty, empty, empty, empty
+
+            def load_candidate_alerts():
+                try:
+                    alerts = fetch_candidate_alerts()
+                    choices = [a["insight_text"] for a in alerts]
+                    return gr.update(choices=choices, value=[])
+                except Exception as e:
+                    return gr.update(choices=[f"Error: {e}"], value=[])
+
+            def on_publish(selected, doctor_id):
+                if not selected:
+                    return "No alerts selected."
+                try:
+                    publish_alerts(selected, doctor_id)
+                    return f"✅ Published {len(selected)} alert(s) to all doctors."
+                except Exception as e:
+                    return f"❌ Error: {e}"
+
+            reg_refresh.click(
+                fn=refresh_regional,
+                inputs=[doctor_id_state],
+                outputs=[reg_today, reg_week, reg_symptom_chart, reg_lang_chart,
+                         reg_volume_chart, reg_doctor_chart]
+            )
+            gen_alerts_btn.click(fn=load_candidate_alerts, outputs=[alert_choices])
+            publish_btn.click(
+                fn=on_publish,
+                inputs=[alert_choices, doctor_id_state],
+                outputs=[publish_status]
+            )
+
+        # ── Tab 4: Health Alerts ──────────────────────────────────────────────
+        with gr.Tab("🔔 Health Alerts"):
+            gr.Markdown("*Alerts published by the head of department. Visible to all doctors.*")
+            alerts_refresh = gr.Button("🔄 Load Alerts")
+            alerts_html    = gr.HTML("<em>Click refresh to load alerts.</em>")
+
+            def load_published_alerts():
+                try:
+                    alerts = fetch_published_alerts()
+                    if not alerts:
+                        return "<em>No alerts published yet.</em>"
+                    cards = ""
+                    colors = {"INFO":"#ebf8ff","WARN":"#fffaf0","CRITICAL":"#fff5f5"}
+                    borders = {"INFO":"#90cdf4","WARN":"#fbd38d","CRITICAL":"#fc8181"}
+                    for a in alerts:
+                        sev = a.get("severity","INFO")
+                        bg  = colors.get(sev,"#ebf8ff")
+                        bd  = borders.get(sev,"#90cdf4")
+                        cards += f"""
+                        <div style="background:{bg};border-left:4px solid {bd};
+                             border-radius:8px;padding:14px 16px;margin-bottom:10px">
+                          <div style="font-weight:600;color:#2d3748;margin-bottom:4px">
+                            {'⚠️' if sev=='WARN' else '🔴' if sev=='CRITICAL' else 'ℹ️'} {sev}
+                          </div>
+                          <div style="color:#4a5568;font-size:14px">{a['insight_text']}</div>
+                          <div style="color:#a0aec0;font-size:11px;margin-top:6px">
+                            Published by {a['published_by']} · {str(a['published_at'])[:16]}
+                          </div>
+                        </div>"""
+                    return cards
+                except Exception as e:
+                    return f"<p style='color:red'>Error: {e}</p>"
+
+            alerts_refresh.click(fn=load_published_alerts, outputs=[alerts_html])
+
+    return demodef build_app() -> gr.Blocks:
+    with gr.Blocks(
+        theme=gr.themes.Soft(primary_hue="blue", secondary_hue="teal"),
+        title="Vaidya Lipi — Medical Scribe"
+    ) as demo:
+
+        gr.Markdown("# Vaidya Lipi · वैद्य लिपि\n*AI Medical Scribe · ABDM-compatible*")
 
         # State lives OUTSIDE tabs so both tabs can share it
         doctor_id_state = gr.State("DR001")
 
-        with gr.Tabs():
+        with gr.Tab("Record Consultation"):
+            with gr.Row():
+                patient_id_box = gr.Textbox(
+                    label="Patient ID (ABHA ID or local ID)",
+                    placeholder="e.g. PAT1234 or 14-digit ABHA",
+                    scale=2
+                )
+                doctor_id_box = gr.Textbox(
+                    label="Doctor ID",
+                    value="DR001",
+                    scale=1
+                )
 
-            # ── Tab 1: Record Consultation ─────────────────────────
-            with gr.Tab("🎙  Record Consultation"):
+            # Sync the textbox into State whenever it changes
+            doctor_id_box.change(
+                fn=lambda x: x,
+                inputs=[doctor_id_box],
+                outputs=[doctor_id_state]
+            )
 
-                with gr.Group(elem_classes="vl-card"):
-                    gr.HTML('<div class="vl-section-label">Patient Information</div>')
-                    with gr.Row():
-                        patient_id_box = gr.Textbox(
-                            label="Patient ID",
-                            placeholder="ABHA ID or local ID  (e.g. PAT1234)",
-                            scale=2,
-                        )
-                        doctor_id_box = gr.Textbox(
-                            label="Doctor ID",
-                            value="DR001",
-                            scale=1,
-                        )
+            gr.Markdown("**Step 1:** Enter patient ID. **Step 2:** Record. **Step 3:** Click Transcribe.")
 
-                gr.HTML("""
-                <div class="vl-steps">
-                  <div class="vl-step">
-                    <div class="vl-step-num">1</div>
-                    <span>Enter patient details</span>
-                  </div>
-                  <div class="vl-step-line"></div>
-                  <div class="vl-step">
-                    <div class="vl-step-num">2</div>
-                    <span>Record consultation</span>
-                  </div>
-                  <div class="vl-step-line"></div>
-                  <div class="vl-step">
-                    <div class="vl-step-num">3</div>
-                    <span>Transcribe audio</span>
-                  </div>
-                  <div class="vl-step-line"></div>
-                  <div class="vl-step">
-                    <div class="vl-step-num">4</div>
-                    <span>Structure &amp; save</span>
-                  </div>
-                </div>
-                """)
+            audio_input = gr.Audio(
+                sources=["microphone"],
+                type="numpy",
+                label="Record consultation (Hindi, English, or any Indian language)",
+            )
 
-                with gr.Group(elem_classes="vl-card vl-audio"):
-                    gr.HTML('<div class="vl-section-label">Audio Recording</div>')
-                    audio_input = gr.Audio(
-                        sources=["microphone"],
-                        type="numpy",
-                        label="Record in Hindi, English, or any Indian language",
+            transcript_box = gr.Textbox(
+                label="Transcript (auto-filled, edit if needed)",
+                lines=4,
+                placeholder="Transcript will appear here after recording..."
+            )
+
+            with gr.Row():
+                transcribe_btn = gr.Button("Transcribe Audio", variant="secondary")
+                process_btn = gr.Button("Structure & Save Record", variant="primary")
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### SOAP Note")
+                    soap_box = gr.JSON(label="Structured Note")
+                with gr.Column():
+                    gr.Markdown("### Detected Medical Entities (SNOMED)")
+                    entities_box = gr.JSON(label="Entities (Parrotlet-e)")
+
+            status_box = gr.Textbox(label="Status", interactive=False)
+
+            def on_transcribe(audio):
+                if audio is None:
+                    return "No audio recorded. Please use the microphone."
+                try:
+                    transcript, lang = transcribe_audio(audio)
+                    return f"[{lang}] {transcript}"
+                except Exception as e:
+                    return f"Transcription error: {e}"
+
+            def on_process(patient_id, doctor_id, transcript):
+                if not transcript.strip():
+                    return {}, [], "Please transcribe audio or type a transcript first."
+                try:
+                    structured = structure_transcript(transcript)
+                    entities = extract_medical_entities(transcript)
+                    record_id = save_record(
+                        patient_id=patient_id or "UNKNOWN",
+                        doctor_id=doctor_id or "DR001",
+                        transcript=transcript,
+                        structured=structured,
+                        entities=entities,
+                        language="mixed"
                     )
+                    return structured, entities, f"✓ Saved. Record ID: {record_id}"
+                except Exception as e:
+                    logging.exception("process error")
+                    return {}, [], f"Error: {e}"
 
-                with gr.Group(elem_classes="vl-card"):
-                    gr.HTML('<div class="vl-section-label">Transcript</div>')
-                    transcript_box = gr.Textbox(
-                        label="",
-                        lines=4,
-                        placeholder="Transcript appears here after recording — or type manually…",
-                        show_label=False,
+            # Only button click — no stop_recording
+            transcribe_btn.click(
+                fn=on_transcribe,
+                inputs=[audio_input],
+                outputs=[transcript_box]
+            )
+            process_btn.click(
+                fn=on_process,
+                inputs=[patient_id_box, doctor_id_box, transcript_box],
+                outputs=[soap_box, entities_box, status_box]
+            )
+
+        with gr.Tab("Doctor Dashboard"):
+            refresh_btn = gr.Button("Refresh Dashboard", variant="secondary")
+            total_box = gr.Number(label="Patients Seen Today")
+            symptoms_box = gr.JSON(label="Top 5 Symptoms Today")
+            lang_box = gr.JSON(label="Language Breakdown")
+
+            def refresh_dashboard(doctor_id):
+                try:
+                    data = get_doctor_dashboard(doctor_id)
+                    return (
+                        data["total_patients_today"],
+                        data["top_symptoms"],
+                        data["languages"]
                     )
-                    with gr.Row():
-                        transcribe_btn = gr.Button("↺  Transcribe Audio", variant="secondary")
-                        process_btn = gr.Button("✦  Structure & Save Record", variant="primary")
+                except Exception as e:
+                    return 0, [], {"error": str(e)}
 
-                with gr.Row(equal_height=False):
-                    with gr.Column():
-                        with gr.Group(elem_classes="vl-card"):
-                            gr.HTML('<div class="vl-section-label">SOAP Note</div>')
-                            soap_box = gr.JSON(label="", show_label=False)
-                    with gr.Column():
-                        with gr.Group(elem_classes="vl-card"):
-                            gr.HTML('<div class="vl-section-label">SNOMED Entities  (Parrotlet-e)</div>')
-                            entities_box = gr.JSON(label="", show_label=False)
+            # Use State, not the textbox from Tab 1
+            refresh_btn.click(
+                fn=refresh_dashboard,
+                inputs=[doctor_id_state],
+                outputs=[total_box, symptoms_box, lang_box]
+            )
 
-                status_box = gr.Textbox(
-                    label="Status",
-                    interactive=False,
-                    elem_classes="vl-status",
-                )
+        with gr.Tab("Health Alerts"):
+            gr.Markdown("### Population-level insights from Spark analytics")
+            gr.Markdown("*(Run Notebook 03 to generate alerts, then refresh)*")
+            alerts_refresh = gr.Button("Load Alerts")
+            alerts_display = gr.JSON(label="Current Alerts")
 
-                # ── Sync doctor ID into shared State ──────────────
-                doctor_id_box.change(
-                    fn=lambda x: x,
-                    inputs=[doctor_id_box],
-                    outputs=[doctor_id_state],
-                )
+            def load_alerts():
+                query = """
+                    SELECT alert_id, generated_at, insight_text, severity
+                    FROM workspace.vaidya.health_alerts
+                    ORDER BY generated_at DESC LIMIT 5
+                """
+                try:
+                    with _get_sql_connection() as conn:
+                        with conn.cursor() as cursor:
+                            cursor.execute(query)
+                            cols = [d[0] for d in cursor.description]
+                            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+                except Exception as e:
+                    return [{"error": str(e)}]
 
-                def on_transcribe(audio):
-                    if audio is None:
-                        return "No audio recorded. Please use the microphone."
-                    try:
-                        transcript, lang = transcribe_audio(audio)
-                        return f"[{lang}] {transcript}"
-                    except Exception as e:
-                        return f"Transcription error: {e}"
-
-                def on_process(patient_id, doctor_id, transcript):
-                    if not transcript.strip():
-                        return {}, [], "Please transcribe audio or type a transcript first."
-                    try:
-                        structured = structure_transcript(transcript)
-                        entities = extract_medical_entities(transcript)
-                        record_id = save_record(
-                            patient_id=patient_id or "UNKNOWN",
-                            doctor_id=doctor_id or "DR001",
-                            transcript=transcript,
-                            structured=structured,
-                            entities=entities,
-                            language="mixed",
-                        )
-                        return structured, entities, f"✓ Saved. Record ID: {record_id}"
-                    except Exception as e:
-                        logging.exception("process error")
-                        return {}, [], f"Error: {e}"
-
-                # Only button click — no stop_recording
-                transcribe_btn.click(
-                    fn=on_transcribe,
-                    inputs=[audio_input],
-                    outputs=[transcript_box],
-                )
-                process_btn.click(
-                    fn=on_process,
-                    inputs=[patient_id_box, doctor_id_box, transcript_box],
-                    outputs=[soap_box, entities_box, status_box],
-                )
-
-            # ── Tab 2: Doctor Dashboard ────────────────────────────
-            with gr.Tab("📊  Dashboard"):
-
-                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;background:transparent;">Today\'s consultation summary for the active doctor.</p>')
-
-                with gr.Group(elem_classes="vl-card"):
-                    gr.HTML('<div class="vl-section-label">Overview</div>')
-                    with gr.Row():
-                        refresh_btn = gr.Button("↻  Refresh Dashboard", variant="secondary", scale=1)
-                        with gr.Column(scale=2):
-                            total_box = gr.Number(
-                                label="Patients Seen Today",
-                                elem_classes="vl-stat",
-                            )
-
-                with gr.Row(equal_height=False):
-                    with gr.Column():
-                        with gr.Group(elem_classes="vl-card"):
-                            gr.HTML('<div class="vl-section-label">Top 5 Symptoms Today</div>')
-                            symptoms_box = gr.JSON(label="", show_label=False)
-                    with gr.Column():
-                        with gr.Group(elem_classes="vl-card"):
-                            gr.HTML('<div class="vl-section-label">Language Breakdown</div>')
-                            lang_box = gr.JSON(label="", show_label=False)
-
-                def refresh_dashboard(doctor_id):
-                    try:
-                        data = get_doctor_dashboard(doctor_id)
-                        return (
-                            data["total_patients_today"],
-                            data["top_symptoms"],
-                            data["languages"],
-                        )
-                    except Exception as e:
-                        return 0, [], {"error": str(e)}
-
-                # Use State, not the textbox from Tab 1
-                refresh_btn.click(
-                    fn=refresh_dashboard,
-                    inputs=[doctor_id_state],
-                    outputs=[total_box, symptoms_box, lang_box],
-                )
-
-            # ── Tab 3: Health Alerts ───────────────────────────────
-            with gr.Tab("⚠  Health Alerts"):
-
-                gr.HTML('<p style="color:#64748B;font-size:0.84rem;padding:10px 0 6px;background:transparent;">Population-level insights from Spark analytics. Run Notebook 03 to generate alerts.</p>')
-
-                with gr.Group(elem_classes="vl-card"):
-                    gr.HTML('<div class="vl-section-label">Active Alerts</div>')
-                    alerts_refresh = gr.Button("↻  Load Alerts", variant="secondary")
-                    alerts_display = gr.JSON(label="", show_label=False)
-
-                def load_alerts():
-                    query = """
-                        SELECT alert_id, generated_at, insight_text, severity
-                        FROM workspace.vaidya.health_alerts
-                        ORDER BY generated_at DESC LIMIT 5
-                    """
-                    try:
-                        with _get_sql_connection() as conn:
-                            with conn.cursor() as cursor:
-                                cursor.execute(query)
-                                cols = [d[0] for d in cursor.description]
-                                return [dict(zip(cols, row)) for row in cursor.fetchall()]
-                    except Exception as e:
-                        return [{"error": str(e)}]
-
-                alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
+            alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
 
     return demo
 
@@ -974,7 +1078,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
