@@ -130,7 +130,7 @@ def _load_parrotlet():
         try:
             from databricks.sdk import WorkspaceClient
             w = WorkspaceClient()
-            vol = "/Volumes/main/vaidya/models_and_indexes/parrotlet_index"
+            vol = "/Volumes/workspace/vaidya/models_and_indexes/parrotlet_index"
             for fname in ["index.faiss", "metadata.json"]:
                 with w.files.download(f"{vol}/{fname}").contents as src:
                     with open(f"{index_dir}/{fname}", "wb") as dst:
