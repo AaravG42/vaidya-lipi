@@ -437,6 +437,8 @@ def get_doctor_dashboard(doctor_id: str) -> dict:
         "languages": languages,
     }
 
+
+
 # ── HTML rendering helpers ────────────────────────────────────────────────────
 
 def render_soap_html(structured: dict, entities: list) -> str:
@@ -488,6 +490,89 @@ def render_soap_html(structured: dict, entities: list) -> str:
       </div>
     </div>
     """
+
+def fetch_patient_last_visit(patient_id: str) -> str:
+    """Returns rendered HTML of last visit, or empty string if no history."""
+    if not patient_id or len(patient_id.strip()) < 3:
+        return ""
+    try:
+        with _get_sql_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT
+                        timestamp,
+                        get_json_object(structured_note, '$.diagnosis')   as diagnosis,
+                        get_json_object(structured_note, '$.symptoms')     as symptoms,
+                        get_json_object(structured_note, '$.medications')  as medications,
+                        soap_plan,
+                        doctor_id,
+                        COUNT(*) OVER (PARTITION BY patient_id)            as total_visits
+                    FROM workspace.vaidya.patient_records
+                    WHERE patient_id = '{patient_id.strip()}'
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """)
+                row = cur.fetchone()
+
+        if not row:
+            return "<div style='color:var(--body-text-color-subdued);font-size:13px;padding:8px'>No previous visits found for this patient.</div>"
+
+        ts, diagnosis, symptoms_json, meds_json, plan, doctor, total = row
+        ts_str = str(ts)[:16] if ts else "Unknown"
+
+        # Parse JSON arrays safely
+        try:
+            symptoms = json.loads(symptoms_json) if symptoms_json else []
+        except Exception:
+            symptoms = []
+        try:
+            meds = json.loads(meds_json) if meds_json else []
+        except Exception:
+            meds = []
+
+        sym_tags = "".join(
+            f'<span style="background:var(--background-fill-secondary);border:1px solid var(--border-color-primary);border-radius:10px;padding:2px 9px;margin:2px;display:inline-block;font-size:12px;color:var(--body-text-color)">{s}</span>'
+            for s in symptoms
+        ) or "<em>—</em>"
+
+        med_tags = "".join(
+            f'<span style="background:var(--background-fill-secondary);border:1px solid var(--border-color-primary);border-radius:10px;padding:2px 9px;margin:2px;display:inline-block;font-size:12px;color:var(--body-text-color)">💊 {m}</span>'
+            for m in meds
+        ) or "<em>—</em>"
+
+        return f"""
+        <div style="border:1px solid var(--border-color-primary);border-radius:10px;
+                    padding:14px 16px;background:var(--background-fill-secondary);margin-bottom:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <span style="font-weight:600;font-size:14px;color:var(--body-text-color)">
+                    📋 Last Visit — {ts_str}
+                </span>
+                <span style="font-size:12px;color:var(--body-text-color-subdued)">
+                    {total} total visit{"s" if total != 1 else ""} · {doctor}
+                </span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);margin-bottom:4px">DIAGNOSIS</div>
+                    <div style="font-size:13px;color:var(--body-text-color)">{diagnosis or "—"}</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);margin-bottom:4px">PLAN GIVEN</div>
+                    <div style="font-size:13px;color:var(--body-text-color)">{(plan or "—")[:120]}{"..." if plan and len(plan) > 120 else ""}</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);margin-bottom:4px">SYMPTOMS</div>
+                    <div>{sym_tags}</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--body-text-color-subdued);margin-bottom:4px">MEDICATIONS</div>
+                    <div>{med_tags}</div>
+                </div>
+            </div>
+        </div>
+        """
+    except Exception as e:
+        return f"<div style='color:red;font-size:12px'>Could not load history: {e}</div>"
 
 
 # ── Chart helpers ─────────────────────────────────────────────────────────────
@@ -721,7 +806,21 @@ def build_app() -> gr.Blocks:
                     scale=1
                 )
 
+            # ── Patient history panel — auto-populates on ID entry ─────────────
+            last_visit_panel = gr.HTML(
+                value="<div style='color:var(--body-text-color-subdued);font-size:13px;padding:6px 2px'>Enter a Patient ID above to see visit history.</div>"
+            )
+
+            # Wire: as soon as doctor finishes typing the patient ID, fetch history
+            patient_id_box.change(
+                fn=fetch_patient_last_visit,
+                inputs=[patient_id_box],
+                outputs=[last_visit_panel],
+                show_progress="hidden",   # silent — don't flash a bar for a quick lookup
+            )
+
             doctor_id_box.change(lambda x: x, inputs=[doctor_id_box], outputs=[doctor_id_state])
+
 
             audio_input = gr.Audio(
                 sources=["microphone"],
