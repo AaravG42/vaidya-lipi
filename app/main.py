@@ -283,72 +283,95 @@ def structure_transcript(transcript: str) -> dict:
             "soap_o": "", "soap_a": "", "soap_p": ""
         }
 
-def save_record(patient_id: str, doctor_id: str, transcript: str,
-                structured: dict, entities: list, language: str) -> str:
-    """Write a completed consultation record to Delta Lake."""
-    from pyspark.sql import SparkSession
-    from pyspark.sql import Row
-    from datetime import datetime
+def _get_sql_connection():
+    """Get a SQL warehouse connection — works inside Databricks Apps."""
+    from databricks import sql
+    from databricks.sdk import WorkspaceClient
 
-    spark = SparkSession.builder.getOrCreate()
-    record_id = str(uuid.uuid4())
+    w = WorkspaceClient()
+    host = w.config.host.replace("https://", "")
 
-    row = Row(
-        record_id=record_id,
-        patient_id=patient_id,
-        doctor_id=doctor_id,
-        hospital_id=os.environ.get("HOSPITAL_ID", "DEMO_HOSPITAL"),
-        timestamp=datetime.now(),
-        language_detected=language,
-        raw_transcript=transcript,
-        symptoms=structured.get("symptoms", []),
-        diagnosis=structured.get("diagnosis"),
-        medications=structured.get("medications", []),
-        snomed_codes=[e["concept_id"] for e in entities],
-        structured_note=json.dumps(structured),
-        soap_subjective=structured.get("soap_s"),
-        soap_objective=structured.get("soap_o"),
-        soap_assessment=structured.get("soap_a"),
-        soap_plan=structured.get("soap_p"),
-        is_anonymized=False,
+    # Find the first running SQL warehouse
+    warehouses = list(w.warehouses.list())
+    running = [wh for wh in warehouses if str(wh.state).upper() == "RUNNING"]
+    warehouse_id = running[0].id if running else warehouses[0].id
+
+    token = w.config.authenticate().get("Authorization", "").replace("Bearer ", "")
+
+    return sql.connect(
+        server_hostname=host,
+        http_path=f"/sql/1.0/warehouses/{warehouse_id}",
+        access_token=token,
     )
 
-    df = spark.createDataFrame([row])
-    df.write.mode("append").saveAsTable("workspace.vaidya.patient_records")
+
+def save_record(patient_id: str, doctor_id: str, transcript: str,
+                structured: dict, entities: list, language: str) -> str:
+    record_id = str(uuid.uuid4())
+    now = datetime.now().strftime("%Y-%m-%d %Human:%M:%S")
+    symptoms    = json.dumps(structured.get("symptoms", []))
+    medications = json.dumps(structured.get("medications", []))
+    snomed_codes = json.dumps([e["concept_id"] for e in entities])
+    structured_note = json.dumps(structured)
+
+    # Escape single quotes in text fields
+    def esc(s): return (s or "").replace("'", "''")
+
+    sql_stmt = f"""
+    INSERT INTO workspace.vaidya.patient_records
+        (record_id, patient_id, doctor_id, hospital_id, timestamp,
+         language_detected, raw_transcript, structured_note,
+         soap_subjective, soap_objective, soap_assessment, soap_plan,
+         is_anonymized)
+    VALUES
+        ('{record_id}', '{esc(patient_id)}', '{esc(doctor_id)}',
+         '{os.environ.get("HOSPITAL_ID","DEMO_HOSPITAL")}', '{now}',
+         '{language}', '{esc(transcript)}', '{esc(structured_note)}',
+         '{esc(structured.get("soap_s",""))}',
+         '{esc(structured.get("soap_o",""))}',
+         '{esc(structured.get("soap_a",""))}',
+         '{esc(structured.get("soap_p",""))}',
+         false)
+    """
+
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql_stmt)
+
     return record_id
 
 
 def get_doctor_dashboard(doctor_id: str) -> dict:
-    """PySpark aggregations on Delta Lake for the doctor's dashboard."""
-    from pyspark.sql import SparkSession
-    from pyspark.sql import functions as F
-
-    spark = SparkSession.builder.getOrCreate()
-
-    df = spark.sql(f"""
-        SELECT * FROM workspace.vaidya.patient_records
+    query = f"""
+        SELECT
+            COUNT(*) as total,
+            language_detected
+        FROM workspace.vaidya.patient_records
         WHERE doctor_id = '{doctor_id}'
         AND DATE(timestamp) = CURRENT_DATE()
-    """)
+        GROUP BY language_detected
+    """
 
-    total = df.count()
+    symptom_query = f"""
+        SELECT symptom, COUNT(*) as cnt FROM (
+            SELECT explode(from_json(structured_note, 'symptoms ARRAY<STRING>'))
+                   as symptom
+            FROM workspace.vaidya.patient_records
+            WHERE doctor_id = '{doctor_id}'
+            AND DATE(timestamp) = CURRENT_DATE()
+        ) GROUP BY symptom ORDER BY cnt DESC LIMIT 5
+    """
 
-    # Explode symptoms array and count
-    symptom_counts = (
-        df.select(F.explode("symptoms").alias("symptom"))
-        .groupBy("symptom").count()
-        .orderBy("count", ascending=False)
-        .limit(5)
-        .collect()
-    )
-    top_symptoms = [(row["symptom"], row["count"]) for row in symptom_counts]
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            total = sum(r[0] for r in rows)
+            languages = {r[1]: r[0] for r in rows}
 
-    # Language breakdown
-    lang_counts = (
-        df.groupBy("language_detected").count()
-        .collect()
-    )
-    languages = {row["language_detected"]: row["count"] for row in lang_counts}
+            cursor.execute(symptom_query)
+            sym_rows = cursor.fetchall()
+            top_symptoms = [(r[0], r[1]) for r in sym_rows]
 
     return {
         "total_patients_today": total,
@@ -485,17 +508,20 @@ def build_app() -> gr.Blocks:
             alerts_refresh = gr.Button("Load Alerts")
             alerts_display = gr.JSON(label="Current Alerts")
 
-            def load_alerts():
-                from pyspark.sql import SparkSession
-                spark = SparkSession.builder.getOrCreate()
-                try:
-                    df = spark.sql("""
-                        SELECT * FROM workspace.vaidya.health_alerts
-                        ORDER BY generated_at DESC LIMIT 5
-                    """)
-                    return [row.asDict() for row in df.collect()]
-                except Exception as e:
-                    return [{"error": str(e)}]
+           def load_alerts():
+            query = """
+                SELECT alert_id, generated_at, insight_text, severity
+                FROM workspace.vaidya.health_alerts
+                ORDER BY generated_at DESC LIMIT 5
+            """
+            try:
+                with _get_sql_connection() as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute(query)
+                        cols = [d[0] for d in cursor.description]
+                        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+            except Exception as e:
+                return [{"error": str(e)}]
 
             alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
 
