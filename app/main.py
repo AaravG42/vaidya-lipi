@@ -10,8 +10,8 @@ if _SRC.is_dir() and str(_SRC) not in sys.path:
 
 CSS = """
         .section-header { font-size:15px; font-weight:600; color:#2d3748; margin:8px 0 4px }
-        .stat-card       { background:#f7fafc; border-radius:8px; padding:12px 16px; text-align:center }
-        .stat-num        { font-size:28px; font-weight:700; color:#2b6cb0 }
+        .stat-card       { background:#f0fff4; border-radius:8px; padding:12px 16px; text-align:center }
+        .stat-num        { font-size:28px; font-weight:700; color:#276749 }
         .stat-label      { font-size:12px; color:#718096; margin-top:2px }
         footer           { visibility:hidden }
 
@@ -51,15 +51,44 @@ CSS = """
             color: var(--body-text-color) !important;
         }
 
-        /* ── Light mode stat cards ───────────────────────────────────────── */
+        /* ── Header logo + title ─────────────────────────────────────────── */
+        .vaidya-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 0 4px;
+        }
+        .vaidya-logo svg {
+            width: 52px;
+            height: 52px;
+        }
+        .vaidya-title {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--body-text-color);
+            line-height: 1.2;
+        }
+        .vaidya-subtitle {
+            font-size: 13px;
+            color: var(--body-text-color-subdued);
+            margin-top: 2px;
+        }
+
+        /* ── Stat cards dark ─────────────────────────────────────────────── */
         @media (prefers-color-scheme: dark) {
             .stat-card  { background: var(--background-fill-secondary) }
-            .stat-num   { color: #63b3ed }
+            .stat-num   { color: #68d391 }
             .stat-label { color: var(--body-text-color-subdued) }
         }
         .dark .stat-card  { background: var(--background-fill-secondary) }
-        .dark .stat-num   { color: #63b3ed }
+        .dark .stat-num   { color: #68d391 }
         .dark .stat-label { color: var(--body-text-color-subdued) }
+
+        /* ── SOAP accent bars — green instead of blue ────────────────────── */
+        .soap-s { border-left-color: #48bb78 !important; }
+        .soap-o { border-left-color: #38a169 !important; }
+        .soap-a { border-left-color: #276749 !important; }
+        .soap-p { border-left-color: #9ae6b4 !important; }
         """
 
 
@@ -943,18 +972,51 @@ def build_app() -> gr.Blocks:
     """
 
     with gr.Blocks(
-        theme=gr.themes.Soft(primary_hue="blue", secondary_hue="teal"),
+        theme=gr.themes.Soft(primary_hue="green", secondary_hue="emerald"),
         css=CSS,
         title="Vaidya Lipi — Medical Scribe"
     ) as demo:
 
         DOCTOR_ID = "DR001"   # in production this comes from login
 
-        gr.Markdown(
-            "# Vaidya Lipi · वैद्य लिपि\n"
-            "*AI Medical Scribe · ABDM-compatible · "
-            f"Logged in as **{DOCTOR_ID}** (Head of Department)*"
-        )
+        # gr.Markdown(
+        #     "# Vaidya Lipi · वैद्य लिपि\n"
+        #     "*AI Medical Scribe · ABDM-compatible · "
+        #     f"Logged in as **{DOCTOR_ID}** (Head of Department)*"
+        # )
+
+        # REMOVE this line:
+        # gr.Markdown("# Vaidya Lipi · वैद्य लिपि\n*AI Medical Scribe ...*")
+
+        # REPLACE with:
+        gr.HTML(f"""
+        <div class="vaidya-header">
+          <div class="vaidya-logo">
+            <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Outer circle -->
+              <circle cx="26" cy="26" r="25" fill="#f0fff4" stroke="#38a169" stroke-width="2"/>
+              <!-- Doctor head -->
+              <circle cx="26" cy="17" r="7" fill="#38a169"/>
+              <!-- Doctor body / coat -->
+              <path d="M13 42 C13 32 20 28 26 28 C32 28 39 32 39 42Z" fill="#38a169"/>
+              <!-- Stethoscope -->
+              <path d="M20 30 Q18 36 20 40 Q22 44 26 44 Q30 44 32 40 Q34 36 32 30"
+                    stroke="#276749" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <circle cx="26" cy="44" r="2.5" fill="#276749"/>
+              <!-- Cross on coat -->
+              <rect x="24.5" y="31" width="3" height="8" rx="1" fill="white"/>
+              <rect x="22" y="33.5" width="8" height="3" rx="1" fill="white"/>
+            </svg>
+          </div>
+          <div>
+            <div class="vaidya-title">Vaidya Lipi · वैद्य लिपि</div>
+            <div class="vaidya-subtitle">
+              AI Medical Scribe · ABDM-compatible ·
+              Logged in as <strong>{DOCTOR_ID}</strong> (Head of Department)
+            </div>
+          </div>
+        </div>
+        """)
 
         doctor_id_state = gr.State(DOCTOR_ID)
         # Store structured result between Process and Save steps
