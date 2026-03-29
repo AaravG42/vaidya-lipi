@@ -703,29 +703,30 @@ def build_app() -> gr.Blocks:
             def on_process(transcript, progress=gr.Progress()):
                 if not transcript.strip():
                     return (
-                        gr.update(visible=False),
-                        {},
-                        [],
-                        gr.update(interactive=False),
-                        gr.update(visible=False),
+                        gr.update(visible=False), {}, [],
+                        gr.update(interactive=False), gr.update(visible=False),
                     )
                 try:
+                    progress(0, desc="Analysing transcript with LLM...")
                     structured = structure_transcript(transcript)
-                    entities   = extract_medical_entities(transcript)
-                    html       = render_soap_html(structured, entities)
+
+                    progress(0.6, desc="Extracting medical entities (SNOMED)...")
+                    entities = extract_medical_entities(transcript)
+
+                    progress(1.0, desc="Done")
+                    html = render_soap_html(structured, entities)
                     return (
                         gr.update(value=html, visible=True),
                         structured,
                         entities,
-                        gr.update(interactive=True),   # enable Save button
+                        gr.update(interactive=True),
                         gr.update(visible=False),
                     )
                 except Exception as e:
                     logging.exception("process error")
                     return (
                         gr.update(value=f"<p style='color:red'>Error: {e}</p>", visible=True),
-                        {},
-                        [],
+                        {}, [],
                         gr.update(interactive=False),
                         gr.update(visible=False),
                     )
