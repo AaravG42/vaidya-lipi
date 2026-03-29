@@ -1,0 +1,29 @@
+command: ["python", "app/main.py"]
+
+env:
+  - name: "LLM_OPENAI_BASE_URL"
+    value: "https://7474652659157663.ai-gateway.cloud.databricks.com/mlflow/v1"
+  - name: "LLM_MODEL"
+    value: "databricks-llama-4-maverick"
+  - name: "HOSPITAL_ID"
+    value: "DEMO_HOSPITAL"
+```
+
+Replace `YOUR-GATEWAY-URL` with the URL you copied in Step 2.4. Nothing else goes in here — secrets are loaded via SDK at startup.
+
+---
+
+## Phase 7 — requirements.txt (exact pins, same as Nyaya Dhwani)
+```
+gradio~=4.44.0
+gradio-client==1.3.0
+huggingface-hub~=0.35.3
+pandas~=2.2.3
+databricks-sdk
+requests
+numpy
+torch
+transformers
+sentence-transformers
+faiss-cpu
+datasets
