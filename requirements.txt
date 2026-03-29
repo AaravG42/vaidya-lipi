@@ -13,3 +13,4 @@ faiss-cpu
 datasets
 openai
 databricks-sql-connector
+scikit-learn

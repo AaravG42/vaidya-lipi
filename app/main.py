@@ -689,6 +689,274 @@ def make_daily_volume_chart(rows: list, title: str):
 
 # ── Dashboard data fetchers ───────────────────────────────────────────────────
 
+def fetch_all_records_for_ml() -> list[dict]:
+    """Pull all records needed for clustering."""
+    with _get_sql_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    record_id,
+                    patient_id,
+                    doctor_id,
+                    DATE(timestamp)                                      AS visit_date,
+                    timestamp,
+                    get_json_object(structured_note, '$.diagnosis')      AS diagnosis,
+                    get_json_object(structured_note, '$.symptoms')       AS symptoms_json,
+                    get_json_object(structured_note, '$.medications')    AS medications_json
+                FROM workspace.vaidya.patient_records
+                WHERE structured_note IS NOT NULL
+                ORDER BY timestamp DESC
+            """)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def run_ml_analysis(records: list[dict], n_clusters: int = 4):
+    """
+    Full ML pipeline:
+      1. Build binary symptom vectors
+      2. K-Means clustering
+      3. Anomaly detection via centroid distance
+      4. Temporal spike detection
+    Returns a dict of matplotlib figures.
+    """
+    import json
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from collections import Counter
+    from sklearn.preprocessing import MultiLabelBinarizer
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    from sklearn.decomposition import PCA
+
+    GREEN = ["#1a4731","#276749","#2f855a","#38a169","#48bb78","#68d391","#9ae6b4","#c6f6d5"]
+
+    # ── 1. Parse symptoms ─────────────────────────────────────────────────────
+    parsed = []
+    for r in records:
+        try:
+            syms = json.loads(r.get("symptoms_json") or "[]")
+            syms = [s.lower().strip() for s in syms if s]
+        except Exception:
+            syms = []
+        if syms:
+            parsed.append({**r, "symptoms": syms})
+
+    if len(parsed) < 4:
+        return None, "Not enough records with symptoms (need at least 4)."
+
+    symptom_lists = [r["symptoms"] for r in parsed]
+
+    # ── 2. Binary vectorisation ───────────────────────────────────────────────
+    mlb = MultiLabelBinarizer()
+    X = mlb.fit_transform(symptom_lists)
+    vocab = mlb.classes_
+    n_clusters = min(n_clusters, len(parsed) - 1)
+
+    # ── 3. Silhouette sweep ───────────────────────────────────────────────────
+    k_range = range(2, min(8, len(parsed)))
+    sil_scores = {}
+    for k in k_range:
+        km = KMeans(n_clusters=k, random_state=42, n_init=10, max_iter=200)
+        labels = km.fit_predict(X)
+        if len(set(labels)) > 1:
+            sil_scores[k] = silhouette_score(X, labels, metric="cosine")
+
+    best_k = max(sil_scores, key=sil_scores.get) if sil_scores else n_clusters
+
+    # ── 4. Final K-Means ─────────────────────────────────────────────────────
+    km_final = KMeans(n_clusters=best_k, random_state=42, n_init=10, max_iter=300)
+    cluster_labels = km_final.fit_predict(X)
+    centroids = km_final.cluster_centers_
+
+    for i, r in enumerate(parsed):
+        r["cluster"] = int(cluster_labels[i])
+
+    # ── 5. Anomaly score = cosine distance to assigned centroid ───────────────
+    def cosine_dist(vec, centroid):
+        dot  = np.dot(vec, centroid)
+        norm = np.linalg.norm(vec) * np.linalg.norm(centroid)
+        return 1.0 - dot / norm if norm > 0 else 1.0
+
+    scores = np.array([cosine_dist(X[i], centroids[cluster_labels[i]])
+                       for i in range(len(parsed))])
+    mean_s, std_s = scores.mean(), scores.std()
+    threshold = mean_s + 1.5 * std_s
+    anomaly_flags = scores > threshold
+
+    for i, r in enumerate(parsed):
+        r["anomaly_score"] = float(scores[i])
+        r["is_anomaly"]    = bool(anomaly_flags[i])
+
+    # ── 6. Temporal daily counts ──────────────────────────────────────────────
+    from collections import defaultdict
+    daily_sym: dict = defaultdict(lambda: defaultdict(int))
+    for r in parsed:
+        day = str(r.get("visit_date", ""))[:10]
+        for s in r["symptoms"]:
+            daily_sym[day][s] += 1
+
+    # ══ FIGURES ══════════════════════════════════════════════════════════════
+
+    # Fig 1 — Silhouette scores
+    fig1, ax = plt.subplots(figsize=(7, 3.5))
+    ks = list(sil_scores.keys())
+    ss = list(sil_scores.values())
+    bar_colors = [GREEN[3] if k == best_k else GREEN[5] for k in ks]
+    bars = ax.bar(ks, ss, color=bar_colors, edgecolor="none", width=0.5)
+    ax.bar_label(bars, fmt="%.3f", padding=4, fontsize=9)
+    ax.axvline(best_k, color=GREEN[1], linestyle="--", linewidth=1.5,
+               label=f"Best K={best_k} ({sil_scores[best_k]:.3f})")
+    ax.set_xlabel("Number of Clusters (K)", fontsize=11)
+    ax.set_ylabel("Silhouette Score", fontsize=11)
+    ax.set_title("K-Means: Silhouette Score by K", fontsize=13, fontweight="bold")
+    ax.legend(fontsize=9)
+    ax.spines[["top","right"]].set_visible(False)
+    ax.set_ylim(0, max(ss) * 1.25 if ss else 1)
+    fig1.tight_layout()
+
+    # Fig 2 — Cluster symptom profiles (horizontal bars)
+    cluster_profiles = {}
+    for cid in range(best_k):
+        members = [r for r in parsed if r["cluster"] == cid]
+        all_sym = [s for r in members for s in r["symptoms"]]
+        top = Counter(all_sym).most_common(6)
+        top_dx = Counter([r.get("diagnosis","?") for r in members
+                          if r.get("diagnosis")]).most_common(2)
+        cluster_profiles[cid] = {
+            "size": len(members),
+            "top_symptoms": top,
+            "top_diagnoses": [d for d,_ in top_dx],
+        }
+
+    fig2, axes = plt.subplots(1, best_k,
+                              figsize=(max(5 * best_k, 10), 5),
+                              sharey=False)
+    if best_k == 1:
+        axes = [axes]
+    for ax, (cid, prof) in zip(axes, cluster_profiles.items()):
+        syms   = [s for s,_ in prof["top_symptoms"]][::-1]
+        counts = [c for _,c in prof["top_symptoms"]][::-1]
+        color  = GREEN[2 + cid % 4]
+        b = ax.barh(syms, counts, color=color, edgecolor="none", height=0.55)
+        ax.bar_label(b, padding=3, fontsize=9)
+        dx_label = ", ".join(prof["top_diagnoses"][:2]) or "—"
+        ax.set_title(
+            f"Cluster {cid}  ({prof['size']} patients)\n"
+            f"📋 {dx_label}",
+            fontsize=10, fontweight="bold", color=GREEN[1]
+        )
+        ax.set_xlabel("Frequency", fontsize=9)
+        ax.spines[["top","right","left"]].set_visible(False)
+        ax.tick_params(left=False)
+        ax.set_xlim(0, max(counts) * 1.3 if counts else 1)
+    fig2.suptitle("Symptom Clusters — What groups of patients look alike?",
+                  fontsize=13, fontweight="bold")
+    fig2.tight_layout()
+
+    # Fig 3 — PCA scatter (2D projection of clusters)
+    pca = PCA(n_components=2, random_state=42)
+    X_2d = pca.fit_transform(X)
+    fig3, ax = plt.subplots(figsize=(7, 5))
+    for cid in range(best_k):
+        mask = cluster_labels == cid
+        ax.scatter(X_2d[mask, 0], X_2d[mask, 1],
+                   c=GREEN[2 + cid % 4], label=f"Cluster {cid}",
+                   alpha=0.75, edgecolors="white", linewidths=0.5, s=60)
+    # Mark anomalies with red rings
+    anom_mask = np.array([r["is_anomaly"] for r in parsed])
+    ax.scatter(X_2d[anom_mask, 0], X_2d[anom_mask, 1],
+               facecolors="none", edgecolors="#e53e3e",
+               linewidths=1.8, s=130, label="⚠ Anomaly", zorder=5)
+    ax.set_title("Patient Clusters — PCA Projection\n(red rings = anomalies)",
+                 fontsize=12, fontweight="bold")
+    ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}% variance)")
+    ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}% variance)")
+    ax.legend(fontsize=9)
+    ax.spines[["top","right"]].set_visible(False)
+    fig3.tight_layout()
+
+    # Fig 4 — Anomaly score distribution
+    fig4, ax = plt.subplots(figsize=(7, 4))
+    for cid in range(best_k):
+        mask = cluster_labels == cid
+        ax.hist(scores[mask], bins=12, alpha=0.6,
+                color=GREEN[2 + cid % 4], label=f"Cluster {cid}", edgecolor="none")
+    ax.axvline(threshold, color="#e53e3e", linewidth=2, linestyle="--",
+               label=f"Anomaly threshold ({threshold:.3f})")
+    ax.axvline(mean_s, color=GREEN[1], linewidth=1.5, linestyle=":",
+               label=f"Mean ({mean_s:.3f})")
+    ax.set_xlabel("Anomaly Score (cosine distance to centroid)", fontsize=11)
+    ax.set_ylabel("Number of records", fontsize=11)
+    ax.set_title(f"Anomaly Distribution — {anomaly_flags.sum()} anomalies flagged",
+                 fontsize=12, fontweight="bold")
+    ax.legend(fontsize=9)
+    ax.spines[["top","right"]].set_visible(False)
+    fig4.tight_layout()
+
+    # Fig 5 — Temporal symptom spikes (top 5 symptoms over time)
+    all_sym_flat = Counter([s for r in parsed for s in r["symptoms"]])
+    top5 = [s for s, _ in all_sym_flat.most_common(5)]
+    days_sorted = sorted(daily_sym.keys())
+
+    fig5, ax = plt.subplots(figsize=(9, 4))
+    for i, sym in enumerate(top5):
+        counts_by_day = [daily_sym[d].get(sym, 0) for d in days_sorted]
+        if max(counts_by_day) == 0:
+            continue
+        ax.plot(days_sorted, counts_by_day,
+                marker="o", markersize=5, linewidth=2,
+                color=GREEN[1 + i], label=sym)
+
+        # Spike detection: flag days > mean + 2σ for this symptom
+        arr = np.array(counts_by_day, dtype=float)
+        if arr.std() > 0:
+            spike_thresh = arr.mean() + 2 * arr.std()
+            for j, (day, val) in enumerate(zip(days_sorted, counts_by_day)):
+                if val > spike_thresh:
+                    ax.annotate("⚠", xy=(day, val),
+                                fontsize=13, color="#e53e3e",
+                                ha="center", va="bottom")
+
+    ax.set_title("Symptom Trends Over Time\n(⚠ = statistical spike, >2σ above mean)",
+                 fontsize=12, fontweight="bold")
+    ax.set_ylabel("Cases per day", fontsize=10)
+    ax.legend(fontsize=9, loc="upper left")
+    ax.spines[["top","right"]].set_visible(False)
+    plt.xticks(rotation=35, ha="right", fontsize=8)
+    fig5.tight_layout()
+
+    # Anomaly table data
+    anomaly_rows = [
+        [r["patient_id"], r["doctor_id"],
+         ", ".join(r["symptoms"][:3]),
+         r.get("diagnosis","—"),
+         f"{r['anomaly_score']:.3f}",
+         f"Cluster {r['cluster']}"]
+        for r in sorted(parsed, key=lambda x: -x["anomaly_score"])
+        if r["is_anomaly"]
+    ]
+
+    summary = (
+        f"**{len(parsed)}** records analysed · "
+        f"**{best_k}** clusters found · "
+        f"**{anomaly_flags.sum()}** anomalies flagged "
+        f"(threshold {threshold:.3f})"
+    )
+
+    return {
+        "fig_silhouette":   fig1,
+        "fig_clusters":     fig2,
+        "fig_pca":          fig3,
+        "fig_anomaly_dist": fig4,
+        "fig_temporal":     fig5,
+        "anomaly_rows":     anomaly_rows,
+        "summary":          summary,
+    }, None
+
+
 def fetch_dashboard_data(doctor_id: str, scope: str = "personal") -> dict:
     """scope = 'personal' (one doctor) or 'regional' (all doctors)."""
     where = f"doctor_id = '{doctor_id}'" if scope == "personal" else "1=1"
@@ -1451,7 +1719,110 @@ def build_app() -> gr.Blocks:
                 outputs=[viewer_html],
                 show_progress="full",
             )
+# ── Tab 6: ML Analytics ───────────────────────────────────────────────
+        with gr.Tab("🧬 ML Analytics"):
 
+            gr.Markdown(
+                "### Symptom Clustering & Anomaly Detection\n"
+                "K-Means clustering on symptom vectors · "
+                "Anomaly detection via centroid distance · "
+                "Temporal spike detection"
+            )
+
+            with gr.Row():
+                k_slider = gr.Slider(
+                    minimum=2, maximum=8, step=1, value=4,
+                    label="Max clusters to try (best K auto-selected by silhouette score)",
+                    scale=3
+                )
+                ml_scope = gr.Radio(
+                    choices=[("My patients", "mine"), ("All doctors", "all")],
+                    value="all",
+                    label="Scope",
+                    scale=1
+                )
+
+            run_ml_btn = gr.Button("⚙️ Run ML Analysis", variant="primary")
+            ml_summary = gr.Markdown("")
+
+            # ── Charts row 1 ──────────────────────────────────────────────────
+            with gr.Row():
+                plot_silhouette = gr.Plot(label="Silhouette Score by K")
+                plot_pca        = gr.Plot(label="Cluster Map (PCA projection)")
+
+            # ── Charts row 2 ──────────────────────────────────────────────────
+            plot_clusters = gr.Plot(label="Symptom Profiles per Cluster")
+
+            # ── Charts row 3 ──────────────────────────────────────────────────
+            with gr.Row():
+                plot_anomaly_dist = gr.Plot(label="Anomaly Score Distribution")
+                plot_temporal     = gr.Plot(label="Symptom Trends & Spikes")
+
+            # ── Anomaly table ─────────────────────────────────────────────────
+            gr.Markdown("### ⚠️ Flagged Anomalies")
+            gr.Markdown(
+                "*Records whose symptom combinations don't fit any cluster — "
+                "unusual presentations worth reviewing.*"
+            )
+            anomaly_table = gr.Dataframe(
+                headers=["Patient ID", "Doctor", "Symptoms", "Diagnosis",
+                         "Anomaly Score", "Cluster"],
+                datatype=["str","str","str","str","str","str"],
+                row_count=(1, "dynamic"),
+                interactive=False,
+                elem_classes=["dark-table"],
+            )
+
+            def on_run_ml(k, scope, doctor_id, progress=gr.Progress()):
+                empty = ("", None, None, None, None, None, [])
+                try:
+                    progress(0, desc="Fetching records from Delta Lake...")
+                    records = fetch_all_records_for_ml()
+
+                    # Filter by scope
+                    if scope == "mine":
+                        records = [r for r in records if r.get("doctor_id") == doctor_id]
+
+                    if len(records) < 4:
+                        return (
+                            "⚠️ Not enough records. Add more patient data first.",
+                            None, None, None, None, None, []
+                        )
+
+                    progress(0.2, desc=f"Running K-Means (trying K=2 to {k})...")
+                    results, err = run_ml_analysis(records, n_clusters=k)
+
+                    if err:
+                        return (err, None, None, None, None, None, [])
+
+                    progress(0.85, desc="Rendering charts...")
+                    return (
+                        results["summary"],
+                        results["fig_silhouette"],
+                        results["fig_pca"],
+                        results["fig_clusters"],
+                        results["fig_anomaly_dist"],
+                        results["fig_temporal"],
+                        results["anomaly_rows"],
+                    )
+                except Exception as e:
+                    logging.exception("ML analysis error")
+                    return (f"❌ Error: {e}", None, None, None, None, None, [])
+
+            run_ml_btn.click(
+                fn=on_run_ml,
+                inputs=[k_slider, ml_scope, doctor_id_state],
+                outputs=[
+                    ml_summary,
+                    plot_silhouette,
+                    plot_pca,
+                    plot_clusters,
+                    plot_anomaly_dist,
+                    plot_temporal,
+                    anomaly_table,
+                ],
+                show_progress="full",
+            )
     return demo
 
 def main():
