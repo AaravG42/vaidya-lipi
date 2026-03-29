@@ -89,6 +89,11 @@ CSS = """
         .soap-o { border-left-color: #38a169 !important; }
         .soap-a { border-left-color: #276749 !important; }
         .soap-p { border-left-color: #9ae6b4 !important; }
+
+        .vaidya-logo svg {
+            width: 36px;
+            height: 36px;
+        }
         """
 
 
