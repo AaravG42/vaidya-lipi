@@ -274,8 +274,7 @@ def structure_transcript(transcript: str) -> dict:
     content = content.strip()
 
     try:
-        # return json.loads(content)
-        return response
+        return json.loads(content)
     except json.JSONDecodeError:
         return {
             "symptoms": [], "medications": [], "diagnosis": "See raw note",
