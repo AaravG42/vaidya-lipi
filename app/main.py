@@ -276,7 +276,7 @@ def save_record(patient_id: str, doctor_id: str, transcript: str,
     )
 
     df = spark.createDataFrame([row])
-    df.write.mode("append").saveAsTable("main.vaidya.patient_records")
+    df.write.mode("append").saveAsTable("workspace.vaidya.patient_records")
     return record_id
 
 
@@ -326,6 +326,7 @@ def build_app() -> gr.Blocks:
 
         gr.Markdown("# Vaidya Lipi · वैद्य लिपि\n*AI Medical Scribe · ABDM-compatible*")
 
+        # State lives OUTSIDE tabs so both tabs can share it
         doctor_id_state = gr.State("DR001")
 
         with gr.Tab("Record Consultation"):
@@ -341,12 +342,19 @@ def build_app() -> gr.Blocks:
                     scale=1
                 )
 
-            gr.Markdown("**Step 1:** Enter patient ID, then click Record and speak naturally.")
+            # Sync the textbox into State whenever it changes
+            doctor_id_box.change(
+                fn=lambda x: x,
+                inputs=[doctor_id_box],
+                outputs=[doctor_id_state]
+            )
+
+            gr.Markdown("**Step 1:** Enter patient ID. **Step 2:** Record. **Step 3:** Click Transcribe.")
 
             audio_input = gr.Audio(
                 sources=["microphone"],
                 type="numpy",
-                label="Record consultation (speak in Hindi, English, or any Indian language)",
+                label="Record consultation (Hindi, English, or any Indian language)",
             )
 
             transcript_box = gr.Textbox(
@@ -359,7 +367,6 @@ def build_app() -> gr.Blocks:
                 transcribe_btn = gr.Button("Transcribe Audio", variant="secondary")
                 process_btn = gr.Button("Structure & Save Record", variant="primary")
 
-            # Output display
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### SOAP Note")
@@ -370,7 +377,6 @@ def build_app() -> gr.Blocks:
 
             status_box = gr.Textbox(label="Status", interactive=False)
 
-            # Handlers
             def on_transcribe(audio):
                 if audio is None:
                     return "No audio recorded. Please use the microphone."
@@ -384,11 +390,8 @@ def build_app() -> gr.Blocks:
                 if not transcript.strip():
                     return {}, [], "Please transcribe audio or type a transcript first."
                 try:
-                    # 1. Structure with LLM
                     structured = structure_transcript(transcript)
-                    # 2. Extract entities with Parrotlet-e
                     entities = extract_medical_entities(transcript)
-                    # 3. Save to Delta Lake
                     record_id = save_record(
                         patient_id=patient_id or "UNKNOWN",
                         doctor_id=doctor_id or "DR001",
@@ -402,10 +405,14 @@ def build_app() -> gr.Blocks:
                     logging.exception("process error")
                     return {}, [], f"Error: {e}"
 
-            transcribe_btn.click(on_transcribe, inputs=[audio_input], outputs=[transcript_box])
-            audio_input.stop_recording(on_transcribe, outputs=[transcript_box])
+            # Only button click — no stop_recording
+            transcribe_btn.click(
+                fn=on_transcribe,
+                inputs=[audio_input],
+                outputs=[transcript_box]
+            )
             process_btn.click(
-                on_process,
+                fn=on_process,
                 inputs=[patient_id_box, doctor_id_box, transcript_box],
                 outputs=[soap_box, entities_box, status_box]
             )
@@ -427,9 +434,10 @@ def build_app() -> gr.Blocks:
                 except Exception as e:
                     return 0, [], {"error": str(e)}
 
+            # Use State, not the textbox from Tab 1
             refresh_btn.click(
-                refresh_dashboard,
-                inputs=[doctor_id_box],  # reuse from Tab 1
+                fn=refresh_dashboard,
+                inputs=[doctor_id_state],
                 outputs=[total_box, symptoms_box, lang_box]
             )
 
@@ -451,7 +459,7 @@ def build_app() -> gr.Blocks:
                 except Exception as e:
                     return [{"error": str(e)}]
 
-            alerts_refresh.click(load_alerts, outputs=[alerts_display])
+            alerts_refresh.click(fn=load_alerts, outputs=[alerts_display])
 
     return demo
 
